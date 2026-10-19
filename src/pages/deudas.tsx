@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { addMonths, format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { ChevronDown, HandCoins, Landmark, Pencil, PiggyBank, Plus, Trash2, TrendingDown } from 'lucide-react'
+import { ChevronDown, HandCoins, Landmark, Pencil, PiggyBank, Plus, Scissors, Trash2, TrendingDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +20,7 @@ import { MoneyInput } from '@/components/money-input'
 import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
 import { eliminarObligacion, guardarConcepto, guardarObligacion } from '@/lib/api'
-import { fechaCorta, fechaLarga, money, pct } from '@/lib/format'
+import { diasHasta, fechaCorta, fechaLarga, money, pct, proximaFechaDia } from '@/lib/format'
 import { TIPOS_OBLIGACION, type ObligacionVista, type TipoObligacion } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -188,6 +188,23 @@ function TarjetaObligacion({ o, onEdit }: { o: ObligacionVista; onEdit: () => vo
             <CardDescription className="mt-1">
               {o.entidad ?? '—'} · cuota {money(o.cuota)}
             </CardDescription>
+            {o.tipo === 'tarjeta' && (
+              <p className="mt-1 flex items-center gap-1 text-xs">
+                <Scissors className="size-3 text-muted-foreground" />
+                {o.dia_corte ? (
+                  <>
+                    Corte día <b>{o.dia_corte}</b>
+                    <span className="text-muted-foreground">
+                      · próximo {fechaCorta(proximaFechaDia(o.dia_corte))} ({diasHasta(proximaFechaDia(o.dia_corte)) === 0 ? 'hoy' : `en ${diasHasta(proximaFechaDia(o.dia_corte))}d`})
+                    </span>
+                  </>
+                ) : (
+                  <button className="text-primary underline-offset-2 hover:underline" onClick={onEdit}>
+                    Registrar fecha de corte
+                  </button>
+                )}
+              </p>
+            )}
           </div>
           <Button variant="ghost" size="icon-sm" aria-label="Editar" onClick={onEdit}>
             <Pencil />
@@ -276,6 +293,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
     notas: '',
     logo: '',
     responsable: 'Familiar',
+    dia_corte: '',
   })
   const [crearConcepto, setCrearConcepto] = useState(true)
   const [dia, setDia] = useState('5')
@@ -296,6 +314,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
       notas: obligacion?.notas ?? '',
       logo: obligacion?.logo ?? '',
       responsable: obligacion?.responsable ?? 'Familiar',
+      dia_corte: obligacion?.dia_corte?.toString() ?? '',
     })
     setCrearConcepto(!obligacion)
   }, [open, obligacion])
@@ -318,6 +337,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
         notas: f.notas.trim() || null,
         logo: limpiarDominio(f.logo),
         responsable: f.responsable,
+        dia_corte: f.dia_corte ? Math.min(31, Math.max(1, Number(f.dia_corte))) : null,
       }
       const creada = await guardarObligacion(datos)
       if (creada && crearConcepto) {
@@ -419,6 +439,11 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
           <MoneyInput id="o-saldo" value={f.saldo_inicial} onChange={(v) => set('saldo_inicial', v)} />
         </CampoO>
 
+        {f.tipo === 'tarjeta' && (
+          <CampoO label="Día de corte del extracto" htmlFor="o-corte">
+            <Input id="o-corte" inputMode="numeric" placeholder="ej. 25" value={f.dia_corte} onChange={(e) => set('dia_corte', e.target.value.replace(/D/g, '').slice(0, 2))} />
+          </CampoO>
+        )}
         <CampoO label="Saldo con corte al" htmlFor="o-fsaldo">
           <Input id="o-fsaldo" type="date" value={f.fecha_saldo} onChange={(e) => set('fecha_saldo', e.target.value)} />
         </CampoO>

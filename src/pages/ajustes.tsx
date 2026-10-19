@@ -19,7 +19,7 @@ import { ResponsableBadge } from '@/components/responsable-badge'
 import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
 import { agregarMiembro, eliminarCategoria, eliminarConcepto, eliminarMiembro, guardarCategoria, guardarConcepto, guardarConfig } from '@/lib/api'
-import { money } from '@/lib/format'
+import { mesCorto, money } from '@/lib/format'
 import { CLASES, MEDIOS_PAGO, type ClaseCategoria, type Concepto, type TipoObligacion } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -158,6 +158,7 @@ function Plantilla() {
                     </p>
                   </div>
                   <ResponsableBadge nombre={c.responsable} />
+                  {c.hasta_periodo && <Badge variant="outline">hasta {mesCorto(c.hasta_periodo)}</Badge>}
                   {!c.recurrente && c.activo && <Badge variant="outline">Eventual</Badge>}
                   {!c.activo && <Badge variant="secondary">Inactivo</Badge>}
                   {c.activo && Number(c.valor_base) === 0 && <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-amber-300">Definir valor</Badge>}
@@ -212,6 +213,7 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
         responsable: c.responsable ?? 'Familiar',
         logo: limpiarDominio(c.logo),
         icono: c.icono || null,
+        hasta_periodo: c.hasta_periodo || null,
       })
       toast.success(obl === NUEVA_DEUDA ? 'Ítem y deuda creados' : 'Ítem guardado')
       await recargar()
@@ -353,7 +355,15 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
             </SelectContent>
           </Select>
         </CampoA>
-        <CampoA label="Notas" htmlFor="c-notas">
+        <CampoA label="Último mes (si termina)" htmlFor="c-hasta">
+          <Input
+            id="c-hasta"
+            type="month"
+            value={c.hasta_periodo?.slice(0, 7) ?? ''}
+            onChange={(e) => set('hasta_periodo', e.target.value ? `${e.target.value}-01` : null)}
+          />
+        </CampoA>
+        <CampoA label="Notas" htmlFor="c-notas" className="col-span-2 sm:col-span-3">
           <Input id="c-notas" value={c.notas ?? ''} onChange={(e) => set('notas', e.target.value)} />
         </CampoA>
       </div>

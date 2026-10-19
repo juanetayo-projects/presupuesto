@@ -52,13 +52,23 @@ export function resumen(gastos: Gasto[], ingresos: Ingreso[]) {
   }
 }
 
+export interface Detalle {
+  nombre: string
+  valor: number
+  extra?: string
+}
+
 export interface Porcion {
   key: string
   nombre: string
   valor: number
   color: string
   pct: number
+  /** Desglose para el tooltip: conceptos de la categoría, o registros/conceptos que suman la barra. */
+  detalle: Detalle[]
 }
+
+const ordenar = (d: Detalle[]) => d.sort((a, b) => b.valor - a.valor)
 
 export function porCategoria(gastos: Gasto[], categorias: Categoria[]): Porcion[] {
   const map = new Map<string, number>()
@@ -66,20 +76,45 @@ export function porCategoria(gastos: Gasto[], categorias: Categoria[]): Porcion[
   const total = [...map.values()].reduce((a, b) => a + b, 0)
   return categorias
     .filter((c) => map.get(c.id))
-    .map((c) => ({ key: c.id, nombre: c.nombre, valor: map.get(c.id)!, color: c.color, pct: total ? (map.get(c.id)! / total) * 100 : 0 }))
+    .map((c) => {
+      const porConc = new Map<string, number>()
+      for (const g of gastos) if (g.categoria_id === c.id && g.estado !== 'omitido') porConc.set(g.descripcion, (porConc.get(g.descripcion) ?? 0) + valorGasto(g))
+      return {
+        key: c.id,
+        nombre: c.nombre,
+        valor: map.get(c.id)!,
+        color: c.color,
+        pct: total ? (map.get(c.id)! / total) * 100 : 0,
+        detalle: ordenar([...porConc].map(([nombre, valor]) => ({ nombre, valor }))),
+      }
+    })
     .sort((a, b) => b.valor - a.valor)
 }
 
 export function porConcepto(gastos: Gasto[], catPorId: Map<string, Categoria>): Porcion[] {
-  const map = new Map<string, { valor: number; cat: string }>()
+  const map = new Map<string, { valor: number; cat: string; items: Gasto[] }>()
   for (const g of gastos) {
     if (g.estado === 'omitido') continue
     const k = g.descripcion
     const prev = map.get(k)
-    map.set(k, { valor: (prev?.valor ?? 0) + valorGasto(g), cat: g.categoria_id })
+    map.set(k, { valor: (prev?.valor ?? 0) + valorGasto(g), cat: g.categoria_id, items: [...(prev?.items ?? []), g] })
   }
   const total = [...map.values()].reduce((a, b) => a + b.valor, 0)
   return [...map.entries()]
-    .map(([nombre, v]) => ({ key: nombre, nombre, valor: v.valor, color: catPorId.get(v.cat)?.color ?? '#64748b', pct: total ? (v.valor / total) * 100 : 0 }))
+    .map(([nombre, v]) => ({
+      key: nombre,
+      nombre,
+      valor: v.valor,
+      color: catPorId.get(v.cat)?.color ?? '#64748b',
+      pct: total ? (v.valor / total) * 100 : 0,
+      // cada registro del concepto: categoría · responsable · estado
+      detalle: v.items.map((g) => ({
+        nombre: catPorId.get(g.categoria_id)?.nombre ?? '',
+        valor: valorGasto(g),
+        extra: [g.responsable && g.responsable !== 'Familiar' ? g.responsable : 'Familiar', g.estado === 'pagado' ? 'pagado' : 'pendiente', g.cuotas_total ? `cuota ${g.cuota_num}/${g.cuotas_total}` : '']
+          .filter(Boolean)
+          .join(' · '),
+      })),
+    }))
     .sort((a, b) => b.valor - a.valor)
 }

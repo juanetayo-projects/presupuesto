@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Line, Pie, PieChart, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, ArrowDownRight, Copy, Download, BellRing, CalendarClock, CheckCircle2, CircleDollarSign, Landmark, PiggyBank, Receipt, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowDownRight, ChevronDown, Copy, Download, Scissors, BellRing, CalendarClock, CheckCircle2, CircleDollarSign, Landmark, PiggyBank, Receipt, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CategoryIcon } from '@/components/category-icon'
-import { IconoGasto } from '@/components/marca-icono'
+import { IconoGasto, MarcaIcono } from '@/components/marca-icono'
 import { FilterBar } from '@/components/filter-bar'
 import { IngresoForm } from '@/components/ingresos'
 import { KpiCard } from '@/components/kpi-card'
@@ -23,7 +24,7 @@ import { useAlertasNavegador } from '@/hooks/use-alertas'
 import { copiarMesAnterior, generarMes } from '@/lib/api'
 import { exportarMesExcel } from '@/lib/export'
 import { diasHasta, fechaCorta, mesCorto, money, moneyShort, nombreMes, pct, pctLabel, periodoMas } from '@/lib/format'
-import { aplicarFiltros, porCategoria, porConcepto, resumen, valorGasto } from '@/lib/metrics'
+import { aplicarFiltros, porCategoria, porConcepto, resumen, valorGasto, type Porcion } from '@/lib/metrics'
 import type { Ingreso } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -31,7 +32,7 @@ export function DashboardPage() {
   const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, catPorId, recargar } = useData()
   const [filtros] = useFiltros('inicio')
   const { pagar } = useUi()
-  const { alertas } = useAlertasNavegador()
+  const { alertas, cortes } = useAlertasNavegador()
   const [generando, setGenerando] = useState(false)
   const [nuevoIngreso, setNuevoIngreso] = useState<Partial<Ingreso> | null>(null)
 
@@ -43,14 +44,27 @@ export function DashboardPage() {
   const cats = useMemo(() => porCategoria(filtrados, categorias), [filtrados, categorias])
   const items = useMemo(() => porConcepto(filtrados, catPorId), [filtrados, catPorId])
 
+  // Filtros propios de la gráfica de tendencia (además de los filtros de la página)
+  const [tendCat, setTendCat] = useState('todas')
+  const [tendConc, setTendConc] = useState('todos')
+  const mesesTend = useMemo(() => Array.from({ length: 6 }, (_, i) => periodoMas(periodo, i - 5)), [periodo])
+  const conceptosTend = useMemo(
+    () =>
+      [...new Set(todosFiltrados.filter((g) => mesesTend.includes(g.periodo) && (tendCat === 'todas' || g.categoria_id === tendCat)).map((g) => g.descripcion))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [todosFiltrados, mesesTend, tendCat],
+  )
   const tendencia = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => periodoMas(periodo, i - 5)).map((p) => {
-      const gs = aplicarFiltros(gastos.filter((g) => g.periodo === p), { ...filtros, texto: '' }, config.diasAlerta)
+    return mesesTend.map((p) => {
+      const gs = todosFiltrados.filter(
+        (g) => g.periodo === p && g.estado !== 'omitido' && (tendCat === 'todas' || g.categoria_id === tendCat) && (tendConc === 'todos' || g.descripcion === tendConc),
+      )
       const ing = ingresos.filter((x) => x.periodo === p).reduce((s, x) => s + Number(x.valor), 0)
-      const total = gs.filter((g) => g.estado !== 'omitido').reduce((s, g) => s + valorGasto(g), 0)
+      const total = gs.reduce((s, g) => s + valorGasto(g), 0)
       return { mes: mesCorto(p), gastos: total, ingreso: ing || null }
     })
-  }, [gastos, ingresos, periodo, filtros, config.diasAlerta])
+  }, [todosFiltrados, ingresos, mesesTend, tendCat, tendConc])
 
   const deudaTotal = obligaciones.filter((o) => o.tipo !== 'cadena' && o.activo).reduce((s, o) => s + Number(o.saldo_actual ?? 0), 0)
   const sinSaldo = obligaciones.filter((o) => o.tipo !== 'cadena' && o.saldo_inicial == null).length
@@ -74,7 +88,7 @@ export function DashboardPage() {
   async function copiar() {
     setGenerando(true)
     try {
-      const n = await copiarMesAnterior(periodo, gastosAnt, ingresos.filter((i) => i.periodo === anterior), ingresosMes)
+      const n = await copiarMesAnterior(periodo, gastosAnt, ingresos.filter((i) => i.periodo === anterior), ingresosMes, conceptos)
       toast.success(`Se copiaron ${n} gastos de ${nombreMes(anterior)}`)
       await recargar()
     } catch (e) {
@@ -175,10 +189,29 @@ export function DashboardPage() {
             <CardTitle className="flex items-center gap-2">
               <BellRing className="size-4 text-primary" /> Alertas de pago
             </CardTitle>
-            <CardDescription>Vencidos y próximos {config.diasAlerta} días (todos los meses)</CardDescription>
+            <CardDescription>Pagos vencidos y próximos {config.diasAlerta} días, y fechas de corte de tarjetas</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {alertas.length === 0 && (
+            {cortes.map(({ o, fecha, dias }) => (
+              <div key={`corte-${o.id}`} className="flex items-center gap-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-2.5">
+                <MarcaIcono logo={o.logo} icono="credit-card" color="#6250d6" size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">Corte {o.nombre}</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <span>
+                      {fechaCorta(fecha)} · {o.responsable || 'Familiar'}
+                    </span>
+                    <Badge variant="outline" className="h-5 border-violet-500/40 text-violet-700 dark:text-violet-300">
+                      <Scissors /> {dias === 0 ? 'Corta hoy' : `Corte en ${dias}d`}
+                    </Badge>
+                  </div>
+                </div>
+                <Button asChild size="sm" variant="ghost">
+                  <Link to="/deudas">Ver</Link>
+                </Button>
+              </div>
+            ))}
+            {alertas.length === 0 && cortes.length === 0 && (
               <div className="flex items-center gap-3 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="size-4" /> Sin pagos urgentes. ¡Todo al día!
               </div>
@@ -219,17 +252,28 @@ export function DashboardPage() {
             <CardTitle>Gasto por categoría</CardTitle>
             <CardDescription>Valor y % del total de gastos</CardDescription>
           </CardHeader>
-          <CardContent className="grid items-center gap-4 sm:grid-cols-[180px_1fr]">
+          <CardContent className="grid items-center gap-4 sm:grid-cols-[180px_1fr] lg:grid-cols-1 xl:grid-cols-[180px_1fr]">
             <DonutCategorias data={cats} total={r.total} />
             <ul className="min-w-0 space-y-2.5">
               {cats.map((c) => (
                 <li key={c.key} className="text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: c.color }} />
-                    <span className="min-w-0 flex-1 truncate">{c.nombre}</span>
-                    <span className="tabular-nums text-muted-foreground">{money(c.valor)}</span>
-                    <span className="w-12 text-right font-medium tabular-nums">{c.pct.toFixed(1)}%</span>
-                  </div>
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+                      <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: c.color }} />
+                      <span className="min-w-0 flex-1 truncate">{c.nombre}</span>
+                      <span className="tabular-nums text-muted-foreground">{money(c.valor)}</span>
+                      <span className="w-12 text-right font-medium tabular-nums">{c.pct.toFixed(1)}%</span>
+                      <ChevronDown className="size-3.5 text-muted-foreground transition group-open:rotate-180" />
+                    </summary>
+                    <ul className="mt-1.5 mb-1 ml-4.5 grid gap-0.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs">
+                      {c.detalle.map((x) => (
+                        <li key={x.nombre} className="flex gap-2">
+                          <span className="min-w-0 flex-1 truncate">{x.nombre}</span>
+                          <span className="tabular-nums">{money(x.valor)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                   <div className="mt-1 ml-4.5 h-1 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full" style={{ width: `${c.pct}%`, background: c.color }} />
                   </div>
@@ -257,9 +301,46 @@ export function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Tendencia 6 meses</CardTitle>
-            <CardDescription>Total de gastos (barras) frente al ingreso (línea)</CardDescription>
+            <CardDescription>
+              {tendConc !== 'todos' ? `"${tendConc}"` : tendCat !== 'todas' ? (catPorId.get(tendCat)?.nombre ?? '') : 'Total de gastos'} (barras) frente al ingreso (línea)
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Select
+                value={tendCat}
+                onValueChange={(v) => {
+                  setTendCat(v)
+                  setTendConc('todos')
+                }}
+              >
+                <SelectTrigger size="sm" className={cn('min-w-0 flex-1', tendCat !== 'todas' && 'border-primary/60 bg-primary/10 text-primary')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas las categorías</SelectItem>
+                  {categorias.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <span className="size-2 rounded-full" style={{ background: c.color }} />
+                      {c.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={tendConc} onValueChange={setTendConc}>
+                <SelectTrigger size="sm" className={cn('min-w-0 flex-1', tendConc !== 'todos' && 'border-primary/60 bg-primary/10 text-primary')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los conceptos</SelectItem>
+                  {conceptosTend.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Tendencia data={tendencia} />
           </CardContent>
         </Card>
@@ -337,7 +418,17 @@ function BarrasConcepto({ data }: { data: ReturnType<typeof porConcepto> }) {
   const top = data.slice(0, 12)
   const resto = data.slice(12)
   const filas = resto.length
-    ? [...top, { key: 'otros', nombre: `Otros (${resto.length})`, valor: resto.reduce((s, x) => s + x.valor, 0), pct: resto.reduce((s, x) => s + x.pct, 0), color: '#94a3b8' }]
+    ? [
+        ...top,
+        {
+          key: 'otros',
+          nombre: `Otros (${resto.length})`,
+          valor: resto.reduce((s, x) => s + x.valor, 0),
+          pct: resto.reduce((s, x) => s + x.pct, 0),
+          color: '#94a3b8',
+          detalle: resto.map((x) => ({ nombre: x.nombre, valor: x.valor })),
+        },
+      ]
     : top
   return (
     <ChartContainer config={{ valor: { label: 'Valor' } }} className="aspect-auto w-full" style={{ height: Math.max(160, filas.length * 30 + 10) }}>
@@ -398,15 +489,32 @@ function Fila({ color, label, value }: { color: string; label: string; value: st
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TooltipPorcion({ active, payload }: any) {
   if (!active || !payload?.length) return null
-  const d = payload[0].payload as { nombre: string; valor: number; pct: number; color: string }
+  const d = payload[0].payload as Porcion
+  const det = d.detalle ?? []
+  const MAX = 10
   return (
-    <div className="grid min-w-40 gap-1 rounded-lg border bg-background px-3 py-2 text-xs shadow-xl">
+    <div className="grid w-64 gap-1.5 rounded-lg border bg-background px-3 py-2 text-xs shadow-xl">
       <div className="flex items-center gap-2 font-medium">
-        <span className="size-2.5 rounded-[3px]" style={{ background: d.color }} />
-        {d.nombre}
+        <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: d.color }} />
+        <span className="flex-1 truncate">{d.nombre}</span>
+        <span className="tabular-nums">{money(d.valor)}</span>
       </div>
-      <p className="tabular-nums">{money(d.valor)}</p>
       <p className="text-muted-foreground">{d.pct.toFixed(1)}% del total de gastos</p>
+      {det.length > 0 && (
+        <ul className="grid gap-0.5 border-t pt-1.5">
+          {det.slice(0, MAX).map((x, i) => (
+            <li key={i} className="flex items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate">
+                {x.nombre}
+                {x.extra && <span className="text-muted-foreground"> · {x.extra}</span>}
+              </span>
+              <span className="tabular-nums">{money(x.valor)}</span>
+              <span className="w-9 text-right text-muted-foreground tabular-nums">{d.valor ? ((x.valor / d.valor) * 100).toFixed(0) : 0}%</span>
+            </li>
+          ))}
+          {det.length > MAX && <li className="text-muted-foreground">y {det.length - MAX} más…</li>}
+        </ul>
+      )}
     </div>
   )
 }

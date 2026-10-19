@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, ListTree, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 import { ResponsableBadge } from '@/components/responsable-badge'
+import { PanelConceptos } from '@/components/panel-conceptos'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CalendarioPagos } from '@/components/calendario-pagos'
 import { exportarMesExcel } from '@/lib/export'
@@ -46,6 +48,17 @@ export function GastosPage() {
     guardarContraidas(n)
   }
   const buscando = filtros.texto.trim() !== ''
+  const [panelAbierto, setPanelAbierto] = useState(false)
+  /** Abre la categoría (si estaba contraída), cambia a la vista de lista y la lleva a la vista. */
+  const irACategoria = (id: string) => {
+    if (contraidas.has(id)) {
+      const n = new Set(contraidas)
+      n.delete(id)
+      guardarContraidas(n)
+    }
+    if (vista !== 'lista') cambiarVista('lista')
+    setTimeout(() => document.getElementById(`cat-${id}`)?.scrollIntoView({ block: 'start' }), 60)
+  }
   const { abrirGasto } = useUi()
   const [generando, setGenerando] = useState(false)
   const [vista, setVista] = useState<'lista' | 'calendario'>(() => {
@@ -84,7 +97,9 @@ export function GastosPage() {
     [categorias, lista],
   )
 
-  const faltantes = conceptos.filter((c) => c.activo && c.recurrente && !gastosMes.some((g) => g.concepto_id === c.id)).length
+  const faltantes = conceptos.filter(
+    (c) => c.activo && c.recurrente && (!c.hasta_periodo || c.hasta_periodo >= periodo) && !gastosMes.some((g) => g.concepto_id === c.id),
+  ).length
 
   async function completarMes() {
     setGenerando(true)
@@ -130,12 +145,17 @@ export function GastosPage() {
               <CopyPlus /> {gastosMes.length ? `Agregar ${faltantes} de la plantilla` : 'Generar mes'}
             </Button>
           )}
+          <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setPanelAbierto(true)}>
+            <ListTree /> Conceptos
+          </Button>
           <Button size="sm" className="hidden md:inline-flex" onClick={() => abrirGasto()}>
             <Plus /> Nuevo gasto
           </Button>
         </div>
       </div>
 
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_290px]">
+      <div className="min-w-0 space-y-4">
       <FilterBar pagina="gastos" />
 
       {loading && <Skeleton className="h-64 rounded-xl" />}
@@ -167,7 +187,7 @@ export function GastosPage() {
           const abierta = buscando || !contraidas.has(c.id)
           const pendientes = items.filter((g) => g.estado === 'pendiente').length
           return (
-            <section key={c.id} className="overflow-hidden rounded-xl border bg-card shadow-xs">
+            <section key={c.id} id={`cat-${c.id}`} className="scroll-mt-24 overflow-hidden rounded-xl border bg-card shadow-xs">
               <button
                 onClick={() => alternar(c.id)}
                 aria-expanded={abierta}
@@ -197,6 +217,33 @@ export function GastosPage() {
             </section>
           )
         })}
+      </div>
+
+      <aside className="sticky top-20 hidden max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1 lg:block">
+        <PanelConceptos grupos={grupos} totalMes={totalMes} diasAlerta={config.diasAlerta} onIrCategoria={irACategoria} onAbrir={abrirGasto} />
+      </aside>
+      </div>
+
+      <Sheet open={panelAbierto} onOpenChange={setPanelAbierto}>
+        <SheetContent side="right" className="w-[88vw] overflow-y-auto p-4 sm:max-w-sm">
+          <SheetHeader className="p-0">
+            <SheetTitle>Conceptos de {nombreMes(periodo)}</SheetTitle>
+          </SheetHeader>
+          <PanelConceptos
+            grupos={grupos}
+            totalMes={totalMes}
+            diasAlerta={config.diasAlerta}
+            onIrCategoria={(id) => {
+              setPanelAbierto(false)
+              irACategoria(id)
+            }}
+            onAbrir={(g) => {
+              setPanelAbierto(false)
+              abrirGasto(g)
+            }}
+          />
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

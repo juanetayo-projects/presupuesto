@@ -41,6 +41,7 @@ create table public.obligaciones (
   notas text,
   logo text,                  -- dominio de la entidad para mostrar su logo
   responsable text not null default 'Familiar', -- a nombre de quién está la deuda
+  dia_corte int check (dia_corte between 1 and 31), -- tarjetas: día de corte del extracto
   creado_en timestamptz not null default now()
 );
 
@@ -58,7 +59,8 @@ create table public.conceptos (
   notas text,
   responsable text not null default 'Familiar',  -- Familiar, Pily, Juank…
   logo text,                                     -- dominio de la marca (favicon), p. ej. davivienda.com
-  icono text                                     -- icono isométrico cuando no hay logo
+  icono text,                                    -- icono isométrico cuando no hay logo
+  hasta_periodo date                             -- último mes en que se genera (p. ej. un préstamo que termina)
 );
 
 create table public.ingresos (

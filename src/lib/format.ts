@@ -42,3 +42,16 @@ export function fechaEnPeriodo(periodo: string, dia: number | null) {
 
 /** Valores en pesos escritos con puntos o comas → número */
 export const parseMoney = (s: string) => Number(String(s).replace(/[^\d-]/g, '')) || 0
+
+/** Próxima fecha (hoy o después) en que cae el día `dia` del mes; ajusta meses cortos (31 → 30/28). */
+export function proximaFechaDia(dia: number, desde = new Date()) {
+  const hoy = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate())
+  for (let k = 0; k < 2; k++) {
+    const y = hoy.getFullYear()
+    const m = hoy.getMonth() + k
+    const ultimo = new Date(y, m + 1, 0).getDate()
+    const f = new Date(y, m, Math.min(dia, ultimo))
+    if (f >= hoy) return format(f, 'yyyy-MM-dd')
+  }
+  return format(hoy, 'yyyy-MM-dd')
+}

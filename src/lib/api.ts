@@ -60,7 +60,7 @@ export async function guardarConfig(clave: string, valor: unknown) {
 export async function generarMes(periodo: string, conceptos: Concepto[], gastosMes: Gasto[], ingresosMes: Ingreso[], ingresoBase: number) {
   const yaEstan = new Set(gastosMes.map((g) => g.concepto_id).filter(Boolean))
   const nuevos = conceptos
-    .filter((c) => c.activo && c.recurrente && !yaEstan.has(c.id))
+    .filter((c) => c.activo && c.recurrente && !yaEstan.has(c.id) && (!c.hasta_periodo || c.hasta_periodo >= periodo))
     .map((c) => ({
       periodo,
       concepto_id: c.id,
@@ -200,9 +200,11 @@ export async function eliminarCategoria(id: string) {
  * Copia los gastos (no cuotas) del mes anterior con sus valores presupuestados.
  * Útil cuando los valores del mes pasado reflejan mejor la realidad que la plantilla.
  */
-export async function copiarMesAnterior(periodo: string, anteriores: Gasto[], ingresosAnt: Ingreso[], ingresosMes: Ingreso[]) {
+export async function copiarMesAnterior(periodo: string, anteriores: Gasto[], ingresosAnt: Ingreso[], ingresosMes: Ingreso[], conceptos: Concepto[] = []) {
+  // No se copian ítems cuyo último mes ya pasó (p. ej. un préstamo que terminó)
+  const terminados = new Set(conceptos.filter((c) => c.hasta_periodo && c.hasta_periodo < periodo).map((c) => c.id))
   const filas = anteriores
-    .filter((g) => !g.grupo_cuotas && g.estado !== 'omitido')
+    .filter((g) => !g.grupo_cuotas && g.estado !== 'omitido' && !(g.concepto_id && terminados.has(g.concepto_id)))
     .map((g) => ({
       periodo,
       concepto_id: g.concepto_id,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useData } from '@/context/data'
-import { hoyISO, money } from '@/lib/format'
+import { diasHasta, hoyISO, money, proximaFechaDia } from '@/lib/format'
 import { urgencia } from '@/lib/metrics'
 
 /**
@@ -9,7 +9,7 @@ import { urgencia } from '@/lib/metrics'
  * Si el usuario dio permiso, envía una notificación del navegador una vez al día.
  */
 export function useAlertasNavegador() {
-  const { gastos, config } = useData()
+  const { gastos, obligaciones, config } = useData()
 
   const alertas = useMemo(() => {
     return gastos
@@ -18,6 +18,20 @@ export function useAlertasNavegador() {
       .filter((x) => x.u === 'vencido' || x.u === 'hoy' || x.u === 'pronto')
       .sort((a, b) => a.g.fecha_limite!.localeCompare(b.g.fecha_limite!))
   }, [gastos, config.diasAlerta])
+
+  // Fechas de corte de tarjetas de crédito dentro de la ventana de aviso
+  const cortes = useMemo(
+    () =>
+      obligaciones
+        .filter((o) => o.activo && o.tipo === 'tarjeta' && o.dia_corte)
+        .map((o) => {
+          const fecha = proximaFechaDia(o.dia_corte!)
+          return { o, fecha, dias: diasHasta(fecha) }
+        })
+        .filter((c) => c.dias <= config.diasAlerta)
+        .sort((a, b) => a.dias - b.dias),
+    [obligaciones, config.diasAlerta],
+  )
 
   const vencidos = alertas.filter((a) => a.u === 'vencido').length
   const hoy = alertas.filter((a) => a.u === 'hoy').length
@@ -40,5 +54,5 @@ export function useAlertasNavegador() {
     })
   }, [alertas, vencidos, hoy])
 
-  return { alertas, vencidos, hoy }
+  return { alertas, cortes, vencidos, hoy }
 }

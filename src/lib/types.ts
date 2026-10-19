@@ -34,6 +34,8 @@ export interface Concepto {
   responsable: string
   logo: string | null
   icono: string | null
+  /** Último mes en que se genera (yyyy-mm-01); null = sin fin. */
+  hasta_periodo: string | null
 }
 
 export interface Gasto {
@@ -87,6 +89,8 @@ export interface Obligacion {
   notas: string | null
   logo: string | null
   responsable: string
+  /** Tarjetas de crédito: día del mes en que corta el extracto. */
+  dia_corte: number | null
 }
 
 export interface ObligacionVista extends Obligacion {
