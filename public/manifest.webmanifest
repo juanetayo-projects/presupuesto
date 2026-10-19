@@ -1,0 +1,14 @@
+{
+  "name": "Presupuesto familia Etayo-Murillo",
+  "short_name": "Presupuesto",
+  "description": "Control del presupuesto familiar, pagos y deudas",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8fc",
+  "theme_color": "#2f5bd3",
+  "lang": "es-CO",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
