@@ -32,6 +32,8 @@ export interface Concepto {
   orden: number
   notas: string | null
   responsable: string
+  logo: string | null
+  icono: string | null
 }
 
 export interface Gasto {
@@ -83,6 +85,7 @@ export interface Obligacion {
   fecha_cobro: string | null
   activo: boolean
   notas: string | null
+  logo: string | null
 }
 
 export interface ObligacionVista extends Obligacion {

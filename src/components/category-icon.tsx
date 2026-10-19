@@ -1,6 +1,6 @@
 import {
-  AlertTriangle, Baby, Bike, Car, Circle, Fuel, Gift, GraduationCap, HeartPulse, Heart, Home, Landmark, PawPrint, PiggyBank, Scissors, Shield, ShoppingCart,
-  Sparkles, User, Utensils, Zap,
+  AlertTriangle, Baby, Bike, Car, Circle, CreditCard, Droplets, Flame, Flower2, Fuel, Gift, GraduationCap, Hand, HandHeart, HeartPulse, Heart, Home,
+  Landmark, PawPrint, PiggyBank, Pill, Scissors, Shield, ShoppingCart, Smartphone, Smile, Sparkles, Store, Tv, User, Users, Utensils, Wifi, Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,6 +26,19 @@ export const ICONOS: Record<string, LucideIcon> = {
   baby: Baby,
   gift: Gift,
   'paw-print': PawPrint,
+  droplets: Droplets,
+  flame: Flame,
+  wifi: Wifi,
+  tv: Tv,
+  smartphone: Smartphone,
+  hand: Hand,
+  smile: Smile,
+  'heart-handshake': HandHeart,
+  users: Users,
+  flower: Flower2,
+  'credit-card': CreditCard,
+  store: Store,
+  pill: Pill,
 }
 
 export function CategoryIcon({ icono, color, size = 'md' }: { icono: string; color: string; size?: 'sm' | 'md' }) {

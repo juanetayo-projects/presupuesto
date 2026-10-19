@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { KpiCard } from '@/components/kpi-card'
+import { limpiarDominio, MarcaIcono } from '@/components/marca-icono'
 import { MetasSeccion } from '@/components/metas'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { MoneyInput } from '@/components/money-input'
@@ -157,7 +158,8 @@ function TarjetaObligacion({ o, onEdit }: { o: ObligacionVista; onEdit: () => vo
       }}
     >
       <CardHeader>
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-3">
+          <MarcaIcono logo={o.logo} icono={o.tipo === 'cadena' ? 'users' : o.tipo === 'tarjeta' ? 'credit-card' : 'landmark'} color={COLOR_TIPO[o.tipo]} size="lg" />
           <div className="min-w-0 flex-1">
             <CardTitle className="truncate">{o.nombre}</CardTitle>
             <CardDescription>
@@ -255,6 +257,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
     fecha_cobro: '',
     activo: true,
     notas: '',
+    logo: '',
   })
   const [crearConcepto, setCrearConcepto] = useState(true)
   const [dia, setDia] = useState('5')
@@ -273,6 +276,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
       fecha_cobro: obligacion?.fecha_cobro ?? '',
       activo: obligacion?.activo ?? true,
       notas: obligacion?.notas ?? '',
+      logo: obligacion?.logo ?? '',
     })
     setCrearConcepto(!obligacion)
   }, [open, obligacion])
@@ -293,6 +297,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
         fecha_cobro: f.fecha_cobro || null,
         activo: f.activo,
         notas: f.notas.trim() || null,
+        logo: limpiarDominio(f.logo),
       }
       const creada = await guardarObligacion(datos)
       if (creada && crearConcepto) {
@@ -303,6 +308,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
           nombre: creada.nombre,
           medio_pago: f.entidad || null,
           valor_base: f.cuota,
+          logo: datos.logo,
           dia_limite: Number(dia) || null,
           recurrente: true,
           orden: conceptos.length + 1,
@@ -405,6 +411,13 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
             </div>
           </div>
         )}
+        <div className="flex items-end gap-3">
+          <MarcaIcono logo={f.logo} icono="landmark" color={COLOR_TIPO[f.tipo]} size="lg" key={f.logo} />
+          <div className="grid flex-1 gap-1.5">
+            <Label htmlFor="o-logo">Sitio web de la entidad (logo)</Label>
+            <Input id="o-logo" placeholder="ej. davivienda.com" value={f.logo} onChange={(e) => set('logo', e.target.value)} />
+          </div>
+        </div>
         <div className="grid gap-1.5">
           <Label htmlFor="o-notas">Notas</Label>
           <Textarea id="o-notas" rows={2} value={f.notas} onChange={(e) => set('notas', e.target.value)} />

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CategoryIcon } from '@/components/category-icon'
+import { IconoGasto } from '@/components/marca-icono'
 import { FilterBar } from '@/components/filter-bar'
 import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
@@ -228,6 +229,7 @@ function FilaGasto({ g }: { g: Gasto }) {
       >
         <Check className="size-4" strokeWidth={3} />
       </button>
+      <IconoGasto g={g} size="sm" />
       <button className="min-w-0 flex-1 text-left" onClick={() => abrirGasto(g)}>
         <div className="flex items-center gap-1.5">
           <p className={cn('truncate text-sm font-medium', pagado && 'text-muted-foreground line-through decoration-muted-foreground/40')}>{g.descripcion}</p>

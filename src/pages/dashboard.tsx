@@ -9,6 +9,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CategoryIcon } from '@/components/category-icon'
+import { IconoGasto } from '@/components/marca-icono'
 import { FilterBar } from '@/components/filter-bar'
 import { IngresoForm } from '@/components/ingresos'
 import { KpiCard } from '@/components/kpi-card'
@@ -184,10 +185,9 @@ export function DashboardPage() {
             )}
             {alertas.slice(0, 7).map(({ g, u }) => {
               const d = diasHasta(g.fecha_limite!)
-              const cat = catPorId.get(g.categoria_id)
               return (
                 <div key={g.id} className="flex items-center gap-3 rounded-xl border p-2.5">
-                  {cat && <CategoryIcon icono={cat.icono} color={cat.color} size="sm" />}
+                  <IconoGasto g={g} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{g.descripcion}</p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">

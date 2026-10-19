@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { eachDayOfInterval, endOfMonth, format, getDay, isToday, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Card } from '@/components/ui/card'
+import { IconoGasto } from '@/components/marca-icono'
 import { money, moneyShort } from '@/lib/format'
 import { urgencia } from '@/lib/metrics'
 import type { Gasto } from '@/lib/types'
@@ -87,6 +88,7 @@ export function CalendarioPagos({ periodo, gastos, diasAlerta, onSelect }: { per
           {seleccion.map((g) => (
             <button key={g.id} onClick={() => onSelect(g)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-muted/50">
               <span className={cn('size-2 rounded-full', g.estado === 'pagado' ? 'bg-emerald-500' : urgencia(g, diasAlerta) === 'vencido' ? 'bg-rose-500' : 'bg-amber-500')} />
+              <IconoGasto g={g} size="sm" />
               <span className="flex-1 truncate">{g.descripcion}</span>
               <span className="font-medium tabular-nums">{money(g.valor_presupuestado)}</span>
             </button>

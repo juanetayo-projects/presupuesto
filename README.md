@@ -36,4 +36,6 @@ El esquema de la base está en [`supabase/schema.sql`](supabase/schema.sql). El 
 
 `git push origin main` dispara `.github/workflows/deploy.yml`. Requiere los secretos del repositorio `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` y, en Settings → Pages, la fuente "GitHub Actions".
 
+**Logos:** cada ítem u obligación puede tener el sitio web de la marca (`davivienda.com`); la app muestra su favicon oficial mediante el servicio de favicons de Google. Si no hay logo, se dibuja un icono isométrico con el color de la categoría.
+
 > Los datos y las cifras de la familia **no** están en este repositorio: viven sólo en Supabase. La carpeta `privado/` está ignorada por git.

@@ -39,6 +39,7 @@ create table public.obligaciones (
   fecha_cobro date,           -- cadena: fecha del turno en que se recibe
   activo boolean not null default true,
   notas text,
+  logo text,                  -- dominio de la entidad para mostrar su logo
   creado_en timestamptz not null default now()
 );
 
@@ -54,7 +55,9 @@ create table public.conceptos (
   activo boolean not null default true,
   orden int not null default 0,
   notas text,
-  responsable text not null default 'Familiar'   -- Familiar, Pily, Juank…
+  responsable text not null default 'Familiar',  -- Familiar, Pily, Juank…
+  logo text,                                     -- dominio de la marca (favicon), p. ej. davivienda.com
+  icono text                                     -- icono isométrico cuando no hay logo
 );
 
 create table public.ingresos (

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryIcon, ICONOS } from '@/components/category-icon'
+import { limpiarDominio, MarcaIcono } from '@/components/marca-icono'
 import { IngresosCard } from '@/components/ingresos'
 import { MoneyInput } from '@/components/money-input'
 import { ResponsableBadge } from '@/components/responsable-badge'
@@ -147,6 +148,7 @@ function Plantilla() {
               {items.length === 0 && <p className="px-2 py-1 text-xs text-muted-foreground">Sin ítems todavía.</p>}
               {items.map((c) => (
                 <button key={c.id} onClick={() => setEditando(c)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-muted/60">
+                  <MarcaIcono logo={c.logo} icono={c.icono ?? cat.icono} color={cat.color} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className={cn('truncate text-sm font-medium', !c.activo && 'text-muted-foreground line-through')}>{c.nombre}</p>
                     <p className="text-xs text-muted-foreground">
@@ -190,6 +192,8 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
         activo: c.activo ?? true,
         notas: c.notas ?? null,
         responsable: c.responsable ?? 'Familiar',
+        logo: limpiarDominio(c.logo),
+        icono: c.icono || null,
       })
       toast.success('Concepto guardado')
       await recargar()
@@ -218,6 +222,29 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
           <Label htmlFor="c-nombre">Nombre</Label>
           <Input id="c-nombre" value={c.nombre ?? ''} onChange={(e) => set('nombre', e.target.value)} />
         </div>
+        <div className="grid grid-cols-[auto_1fr_1fr] items-end gap-3">
+          <MarcaIcono logo={c.logo} icono={c.icono ?? categorias.find((k) => k.id === c.categoria_id)?.icono} color={categorias.find((k) => k.id === c.categoria_id)?.color ?? '#64748b'} size="lg" key={`${c.logo}-${c.icono}`} />
+          <div className="grid gap-1.5">
+            <Label htmlFor="c-logo">Sitio web (logo)</Label>
+            <Input id="c-logo" placeholder="ej. claro.com.co" value={c.logo ?? ''} onChange={(e) => set('logo', e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Icono (sin logo)</Label>
+            <Select value={c.icono ?? 'circle'} onValueChange={(v) => set('icono', v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(ICONOS).map(([k, Icon]) => (
+                  <SelectItem key={k} value={k}>
+                    <Icon /> {k}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <p className="-mt-2 text-xs text-muted-foreground">Si escribes el sitio web de la empresa se muestra su logo; si no, el icono isométrico.</p>
         <div className="grid gap-1.5">
           <Label>¿De quién es el gasto?</Label>
           <Select value={c.responsable ?? 'Familiar'} onValueChange={(v) => set('responsable', v)}>
