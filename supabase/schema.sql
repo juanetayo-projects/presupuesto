@@ -61,6 +61,9 @@ create table public.ingresos (
   periodo date not null check (extract(day from periodo) = 1),
   descripcion text not null default 'Ingreso base',
   valor numeric(14,0) not null,
+  tipo text not null default 'Salario',
+  notas text,
+  grupo uuid,                 -- ingresos repetidos en varios meses
   creado_en timestamptz not null default now()
 );
 create index on public.ingresos(periodo);
