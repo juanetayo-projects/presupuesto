@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Pencil, Plus, Undo2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 import { ResponsableBadge } from '@/components/responsable-badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CalendarioPagos } from '@/components/calendario-pagos'
@@ -14,7 +14,7 @@ import { IconoGasto } from '@/components/marca-icono'
 import { FilterBar } from '@/components/filter-bar'
 import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
-import { deshacerPago, generarMes } from '@/lib/api'
+import { deshacerPago, eliminarGasto, generarMes } from '@/lib/api'
 import { diasHasta, fechaCorta, money, nombreMes, pctLabel } from '@/lib/format'
 import { aplicarFiltros, resumen, urgencia, valorGasto } from '@/lib/metrics'
 import type { Gasto } from '@/lib/types'
@@ -207,6 +207,23 @@ function FilaGasto({ g }: { g: Gasto }) {
   const u = urgencia(g, config.diasAlerta)
   const pagado = g.estado === 'pagado'
 
+  async function eliminar() {
+    const enGrupo = Boolean(g.grupo_cuotas)
+    const msg = enGrupo
+      ? `¿Eliminar "${g.descripcion}" (cuota ${g.cuota_num}/${g.cuotas_total})?
+
+Aceptar: sólo esta cuota.`
+      : `¿Eliminar "${g.descripcion}" de este mes?`
+    if (!window.confirm(msg)) return
+    try {
+      await eliminarGasto(g, false)
+      toast.success('Gasto eliminado', { description: g.descripcion })
+      await recargar()
+    } catch (e) {
+      toast.error('No se pudo eliminar', { description: (e as Error).message })
+    }
+  }
+
   async function deshacer() {
     try {
       await deshacerPago(g)
@@ -263,15 +280,18 @@ function FilaGasto({ g }: { g: Gasto }) {
           <p className="text-[11px] text-muted-foreground tabular-nums">ppto {money(g.valor_presupuestado)}</p>
         )}
       </div>
-      <div className="hidden gap-1 sm:flex">
-        <Button variant="ghost" size="icon-sm" aria-label="Editar" onClick={() => abrirGasto(g)}>
+      <div className="flex gap-0.5">
+        <Button variant="ghost" size="icon-sm" aria-label="Editar" className="hidden sm:inline-flex" onClick={() => abrirGasto(g)}>
           <Pencil />
         </Button>
         {pagado && (
-          <Button variant="ghost" size="icon-sm" aria-label="Deshacer pago" onClick={deshacer}>
+          <Button variant="ghost" size="icon-sm" aria-label="Deshacer pago" className="hidden sm:inline-flex" onClick={deshacer}>
             <Undo2 />
           </Button>
         )}
+        <Button variant="ghost" size="icon-sm" aria-label="Eliminar gasto" title="Eliminar" className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={eliminar}>
+          <Trash2 />
+        </Button>
       </div>
     </div>
   )

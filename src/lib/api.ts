@@ -231,3 +231,11 @@ export async function guardarMeta(m: Partial<Meta>) {
 export async function eliminarMeta(id: string) {
   check(await supabase.from('metas').delete().eq('id', id))
 }
+
+/**
+ * Quita un ítem de la plantilla. Si ya tiene gastos registrados, éstos se conservan
+ * (la referencia queda en blanco por la llave foránea "on delete set null").
+ */
+export async function eliminarConcepto(id: string) {
+  check(await supabase.from('conceptos').delete().eq('id', id))
+}

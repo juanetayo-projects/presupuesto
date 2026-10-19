@@ -1,18 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
+import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { MoneyInput } from '@/components/money-input'
+import { NUEVA_DEUDA, ObligacionSelect, resolverObligacion, SIN_DEUDA, TipoDeudaSelect } from '@/components/obligacion-select'
 import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
 import { actualizarGasto, crearGasto, eliminarGasto } from '@/lib/api'
 import { fechaEnPeriodo, money, nombreMes, periodoMas } from '@/lib/format'
-import { MEDIOS_PAGO, type Gasto } from '@/lib/types'
+import { MEDIOS_PAGO, type Gasto, type TipoObligacion } from '@/lib/types'
+import { cn } from '@/lib/utils'
 
 interface Props {
   open: boolean
@@ -22,8 +24,20 @@ interface Props {
 
 const NINGUNO = '__ninguno__'
 
+/** Campo compacto: etiqueta pequeña + control. */
+function Campo({ label, htmlFor, className, children }: { label: string; htmlFor?: string; className?: string; children: ReactNode }) {
+  return (
+    <div className={cn('grid min-w-0 gap-1', className)}>
+      <Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  )
+}
+
 export function GastoForm({ open, onOpenChange, gasto }: Props) {
-  const { periodo, categorias, conceptos, obligaciones, config, recargar } = useData()
+  const { periodo, categorias, conceptos, config, recargar } = useData()
   const editando = Boolean(gasto)
 
   const [conceptoId, setConceptoId] = useState(NINGUNO)
@@ -33,7 +47,8 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
   const [valor, setValor] = useState(0)
   const [fecha, setFecha] = useState('')
   const [mes, setMes] = useState(periodo)
-  const [obligacionId, setObligacionId] = useState(NINGUNO)
+  const [obligacionId, setObligacionId] = useState(SIN_DEUDA)
+  const [tipoNueva, setTipoNueva] = useState<TipoObligacion>('tarjeta')
   const [notas, setNotas] = useState('')
   const [responsable, setResponsable] = useState('Familiar')
   const [dividir, setDividir] = useState(false)
@@ -51,7 +66,8 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     setValor(Number(gasto?.valor_presupuestado ?? 0))
     setFecha(gasto?.fecha_limite ?? '')
     setMes(gasto?.periodo ?? periodo)
-    setObligacionId(gasto?.obligacion_id ?? NINGUNO)
+    setObligacionId(gasto?.obligacion_id ?? SIN_DEUDA)
+    setTipoNueva('tarjeta')
     setNotas(gasto?.notas ?? '')
     setResponsable(gasto?.responsable ?? 'Familiar')
     setDividir(false)
@@ -68,7 +84,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     setMedio(c.medio_pago ?? 'Efectivo')
     setValor(Number(c.valor_base))
     setFecha(fechaEnPeriodo(mes, c.dia_limite) ?? '')
-    setObligacionId(c.obligacion_id ?? NINGUNO)
+    setObligacionId(c.obligacion_id ?? SIN_DEUDA)
     setResponsable(c.responsable ?? 'Familiar')
   }
 
@@ -85,11 +101,18 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     if (valor <= 0) return toast.error('El valor debe ser mayor a cero')
     setGuardando(true)
     try {
+      const obligacion_id = await resolverObligacion(obligacionId, {
+        nombre: descripcion.trim(),
+        tipo: tipoNueva,
+        medio,
+        cuota: dividir && modo === 'total' ? Math.round(valor / cuotas) : valor,
+        responsable,
+      })
       const base = {
         periodo: mes,
         concepto_id: conceptoId === NINGUNO ? null : conceptoId,
         categoria_id: categoriaId,
-        obligacion_id: obligacionId === NINGUNO ? null : obligacionId,
+        obligacion_id,
         descripcion: descripcion.trim(),
         medio_pago: medio,
         valor_presupuestado: valor,
@@ -108,6 +131,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
         )
         toast.success(dividir ? `Gasto dividido en ${cuotas} cuotas` : 'Gasto agregado')
       }
+      if (obligacionId === NUEVA_DEUDA) toast.success(`Deuda "${descripcion.trim()}" creada. Registra su saldo en Deudas.`)
       await recargar()
       onOpenChange(false)
     } catch (e) {
@@ -135,8 +159,23 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     <ResponsiveModal
       open={open}
       onOpenChange={onOpenChange}
+      ancho="lg"
       title={editando ? 'Editar gasto' : 'Nuevo gasto'}
-      description={editando && gasto?.cuotas_total ? `Cuota ${gasto.cuota_num} de ${gasto.cuotas_total}` : 'Cualquier gasto del mes, fijo o eventual.'}
+      description={editando && gasto?.cuotas_total ? `Cuota ${gasto.cuota_num} de ${gasto.cuotas_total}` : undefined}
+      footerStart={
+        editando && (
+          <>
+            <Button variant="destructive" onClick={() => borrar(false)}>
+              <Trash2 /> Eliminar
+            </Button>
+            {gasto?.grupo_cuotas && (
+              <Button variant="outline" onClick={() => borrar(true)}>
+                Eliminar cuotas pendientes
+              </Button>
+            )}
+          </>
+        )
+      }
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -148,16 +187,15 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
         </>
       }
     >
-      <div className="grid gap-4 py-1">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3">
         {!editando && (
-          <div className="grid gap-1.5">
-            <Label>Desde la plantilla (opcional)</Label>
+          <Campo label="Desde la plantilla (opcional)" className="col-span-2 sm:col-span-1">
             <Select value={conceptoId} onValueChange={elegirConcepto}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NINGUNO}>Otro concepto / gasto nuevo</SelectItem>
+                <SelectItem value={NINGUNO}>Gasto nuevo</SelectItem>
                 {conceptos
                   .filter((c) => c.activo)
                   .map((c) => (
@@ -167,142 +205,109 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
                   ))}
               </SelectContent>
             </Select>
-          </div>
+          </Campo>
         )}
-
-        <div className="grid gap-1.5">
-          <Label htmlFor="g-desc">Concepto</Label>
-          <Input id="g-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej. Matrícula colegio, SOAT, regalo…" />
-        </div>
-
-        <div className="grid gap-1.5">
-          <Label>¿De quién es el gasto?</Label>
-          <ToggleGroup type="single" variant="outline" size="sm" value={responsable} onValueChange={(v) => v && setResponsable(v)} className="w-full">
+        <Campo label="Concepto" htmlFor="g-desc" className={editando ? 'col-span-2' : 'col-span-2'}>
+          <Input id="g-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej. NU Juank, SOAT, matrícula…" />
+        </Campo>
+        <Campo label="¿De quién es el gasto?" className={editando ? 'col-span-2 sm:col-span-1' : 'col-span-2 sm:col-span-3'}>
+          <ToggleGroup type="single" variant="outline" size="sm" value={responsable} onValueChange={(v) => v && setResponsable(v)} className="h-8 w-full">
             {config.responsables.map((r) => (
-              <ToggleGroupItem key={r} value={r} className="flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+              <ToggleGroupItem key={r} value={r} className="h-8 flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
                 {r}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-        </div>
+        </Campo>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="g-valor">{dividir && modo === 'cuota' ? 'Valor por cuota' : 'Valor'}</Label>
-            <MoneyInput id="g-valor" value={valor} onChange={setValor} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="g-mes">Mes</Label>
-            <Input id="g-mes" type="month" value={mes.slice(0, 7)} onChange={(e) => e.target.value && setMes(`${e.target.value}-01`)} />
-          </div>
-        </div>
+        <Campo label={dividir && modo === 'cuota' ? 'Valor por cuota' : 'Valor'} htmlFor="g-valor">
+          <MoneyInput id="g-valor" value={valor} onChange={setValor} />
+        </Campo>
+        <Campo label="Mes" htmlFor="g-mes">
+          <Input id="g-mes" type="month" value={mes.slice(0, 7)} onChange={(e) => e.target.value && setMes(`${e.target.value}-01`)} />
+        </Campo>
+        <Campo label="Fecha límite de pago" htmlFor="g-fecha" className="col-span-2 sm:col-span-1">
+          <Input id="g-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        </Campo>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label>Categoría</Label>
-            <Select value={categoriaId} onValueChange={setCategoriaId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Elegir" />
-              </SelectTrigger>
-              <SelectContent>
-                {categorias.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <span className="size-2 rounded-full" style={{ background: c.color }} />
-                    {c.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Medio de pago</Label>
-            <Select value={medio} onValueChange={setMedio}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MEDIOS_PAGO.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        <Campo label="Categoría">
+          <Select value={categoriaId} onValueChange={setCategoriaId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Elegir" />
+            </SelectTrigger>
+            <SelectContent>
+              {categorias.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  <span className="size-2 rounded-full" style={{ background: c.color }} />
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Campo>
+        <Campo label="Medio de pago">
+          <Select value={medio} onValueChange={setMedio}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MEDIOS_PAGO.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Campo>
+        <Campo label="Préstamo / deuda" className="col-span-2 sm:col-span-1">
+          <ObligacionSelect value={obligacionId} onChange={setObligacionId} />
+        </Campo>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="g-fecha">Fecha límite de pago</Label>
-            <Input id="g-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Préstamo / deuda</Label>
-            <Select value={obligacionId} onValueChange={setObligacionId}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NINGUNO}>No aplica</SelectItem>
-                {obligaciones.map((o) => (
-                  <SelectItem key={o.id} value={o.id}>
-                    {o.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {!editando && (
-          <div className="rounded-xl border bg-muted/40 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">Dividir en varios meses</p>
-                <p className="text-xs text-muted-foreground">Crea una cuota por mes desde el mes elegido.</p>
-              </div>
-              <Switch checked={dividir} onCheckedChange={setDividir} />
-            </div>
-            {dividir && (
-              <div className="mt-3 grid gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="g-cuotas">Número de cuotas</Label>
-                    <Input id="g-cuotas" type="number" inputMode="numeric" min={2} max={60} value={cuotas} onChange={(e) => setCuotas(Math.max(2, Math.min(60, Number(e.target.value) || 2)))} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>El valor digitado es</Label>
-                    <ToggleGroup type="single" variant="outline" size="sm" value={modo} onValueChange={(v) => v && setModo(v as 'total' | 'cuota')} className="w-full">
-                      <ToggleGroupItem value="total" className="flex-1">Total</ToggleGroupItem>
-                      <ToggleGroupItem value="cuota" className="flex-1">Por cuota</ToggleGroupItem>
-                    </ToggleGroup>
-                  </div>
-                </div>
-                {resumenCuotas && (
-                  <p className="rounded-lg bg-background px-3 py-2 text-xs text-muted-foreground">
-                    {cuotas} cuotas de <b className="text-foreground">{money(resumenCuotas.porCuota)}</b> · total {money(resumenCuotas.total)} · hasta{' '}
-                    {resumenCuotas.hasta}
-                  </p>
-                )}
-              </div>
-            )}
+        {obligacionId === NUEVA_DEUDA && (
+          <div className="col-span-2 grid grid-cols-[1fr_auto] items-end gap-3 rounded-lg border border-primary/30 bg-primary/5 p-2.5 sm:col-span-3 sm:grid-cols-[1fr_1fr]">
+            <p className="text-xs text-muted-foreground">
+              Se creará la deuda <b className="text-foreground">{descripcion.trim() || '(escribe el concepto)'}</b> a nombre de{' '}
+              <b className="text-foreground">{responsable}</b>, con logo según el medio de pago.
+            </p>
+            <Campo label="Tipo de deuda">
+              <TipoDeudaSelect value={tipoNueva} onChange={setTipoNueva} />
+            </Campo>
           </div>
         )}
 
-        <div className="grid gap-1.5">
-          <Label htmlFor="g-notas">Notas</Label>
-          <Textarea id="g-notas" rows={2} value={notas} onChange={(e) => setNotas(e.target.value)} />
-        </div>
+        <Campo label="Notas" htmlFor="g-notas" className="col-span-2 sm:col-span-3">
+          <Input id="g-notas" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Opcional" />
+        </Campo>
 
-        {editando && (
-          <div className="flex flex-wrap gap-2 border-t pt-3">
-            <Button variant="destructive" size="sm" onClick={() => borrar(false)}>
-              Eliminar este gasto
-            </Button>
-            {gasto?.grupo_cuotas && (
-              <Button variant="outline" size="sm" onClick={() => borrar(true)}>
-                Eliminar cuotas pendientes del grupo
-              </Button>
+        {!editando && (
+          <div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-muted/40 px-3 py-2 sm:col-span-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Switch checked={dividir} onCheckedChange={setDividir} /> Dividir en varios meses
+            </label>
+            {dividir && (
+              <>
+                <Input
+                  aria-label="Número de cuotas"
+                  type="number"
+                  inputMode="numeric"
+                  min={2}
+                  max={60}
+                  className="h-8 w-16"
+                  value={cuotas}
+                  onChange={(e) => setCuotas(Math.max(2, Math.min(60, Number(e.target.value) || 2)))}
+                />
+                <span className="text-sm text-muted-foreground">cuotas · el valor es</span>
+                <ToggleGroup type="single" variant="outline" size="sm" value={modo} onValueChange={(v) => v && setModo(v as 'total' | 'cuota')}>
+                  <ToggleGroupItem value="total">Total</ToggleGroupItem>
+                  <ToggleGroupItem value="cuota">Por cuota</ToggleGroupItem>
+                </ToggleGroup>
+                {resumenCuotas && (
+                  <span className="basis-full text-xs text-muted-foreground">
+                    {cuotas} cuotas de <b className="text-foreground">{money(resumenCuotas.porCuota)}</b> · total {money(resumenCuotas.total)} · hasta{' '}
+                    {resumenCuotas.hasta}
+                  </span>
+                )}
+              </>
             )}
           </div>
         )}

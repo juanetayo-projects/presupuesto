@@ -40,6 +40,7 @@ create table public.obligaciones (
   activo boolean not null default true,
   notas text,
   logo text,                  -- dominio de la entidad para mostrar su logo
+  responsable text not null default 'Familiar', -- a nombre de quién está la deuda
   creado_en timestamptz not null default now()
 );
 

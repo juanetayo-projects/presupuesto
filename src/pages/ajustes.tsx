@@ -9,16 +9,18 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CategoryIcon, ICONOS } from '@/components/category-icon'
 import { limpiarDominio, MarcaIcono } from '@/components/marca-icono'
 import { IngresosCard } from '@/components/ingresos'
 import { MoneyInput } from '@/components/money-input'
+import { NUEVA_DEUDA, ObligacionSelect, resolverObligacion, SIN_DEUDA, TipoDeudaSelect } from '@/components/obligacion-select'
 import { ResponsableBadge } from '@/components/responsable-badge'
 import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
-import { agregarMiembro, eliminarCategoria, eliminarMiembro, guardarCategoria, guardarConcepto, guardarConfig } from '@/lib/api'
+import { agregarMiembro, eliminarCategoria, eliminarConcepto, eliminarMiembro, guardarCategoria, guardarConcepto, guardarConfig } from '@/lib/api'
 import { money } from '@/lib/format'
-import { CLASES, MEDIOS_PAGO, type ClaseCategoria, type Concepto } from '@/lib/types'
+import { CLASES, MEDIOS_PAGO, type ClaseCategoria, type Concepto, type TipoObligacion } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 const GRIS_OTROS = "#94a3b8"
@@ -173,18 +175,34 @@ function Plantilla() {
 }
 
 function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | null; onClose: () => void }) {
-  const { categorias, config, recargar } = useData()
+  const { categorias, config, gastos, recargar } = useData()
   const [c, setC] = useState<Partial<Concepto>>({})
-  useEffect(() => setC(concepto ?? {}), [concepto])
+  const [obl, setObl] = useState(SIN_DEUDA)
+  const [tipoNueva, setTipoNueva] = useState<TipoObligacion>('tarjeta')
+  useEffect(() => {
+    setC(concepto ?? {})
+    setObl(concepto?.obligacion_id ?? SIN_DEUDA)
+    setTipoNueva('tarjeta')
+  }, [concepto])
   const set = <K extends keyof Concepto>(k: K, v: Concepto[K]) => setC((x) => ({ ...x, [k]: v }))
+  const cat = categorias.find((k) => k.id === c.categoria_id)
+  const usos = c.id ? gastos.filter((g) => g.concepto_id === c.id).length : 0
 
   async function guardar() {
     if (!c.nombre?.trim() || !c.categoria_id) return toast.error('Nombre y categoría son obligatorios')
     try {
+      const obligacion_id = await resolverObligacion(obl, {
+        nombre: c.nombre.trim(),
+        tipo: tipoNueva,
+        medio: c.medio_pago ?? null,
+        cuota: Number(c.valor_base ?? 0),
+        responsable: c.responsable ?? 'Familiar',
+      })
       await guardarConcepto({
         id: c.id,
         nombre: c.nombre.trim(),
         categoria_id: c.categoria_id,
+        obligacion_id,
         medio_pago: c.medio_pago ?? null,
         valor_base: Number(c.valor_base ?? 0),
         dia_limite: c.dia_limite || null,
@@ -195,7 +213,7 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
         logo: limpiarDominio(c.logo),
         icono: c.icono || null,
       })
-      toast.success('Concepto guardado')
+      toast.success(obl === NUEVA_DEUDA ? 'Ítem y deuda creados' : 'Ítem guardado')
       await recargar()
       onClose()
     } catch (e) {
@@ -203,11 +221,35 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
     }
   }
 
+  async function borrar() {
+    if (!c.id) return
+    const msg = usos
+      ? `"${c.nombre}" se usa en ${usos} gasto(s). Se quitará de la plantilla (los gastos ya registrados se conservan). ¿Continuar?`
+      : `¿Eliminar "${c.nombre}" de la plantilla?`
+    if (!window.confirm(msg)) return
+    try {
+      await eliminarConcepto(c.id)
+      toast.success('Ítem eliminado de la plantilla')
+      await recargar()
+      onClose()
+    } catch (e) {
+      toast.error('No se pudo eliminar', { description: (e as Error).message })
+    }
+  }
+
   return (
     <ResponsiveModal
       open={Boolean(concepto)}
       onOpenChange={(v) => !v && onClose()}
-      title={c.id ? 'Editar concepto' : 'Nuevo concepto'}
+      ancho="lg"
+      title={c.id ? 'Editar ítem de la plantilla' : 'Nuevo ítem'}
+      footerStart={
+        c.id && (
+          <Button variant="destructive" onClick={borrar}>
+            <Trash2 /> Eliminar
+          </Button>
+        )
+      }
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
@@ -217,106 +259,119 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
         </>
       }
     >
-      <div className="grid gap-4 py-1">
-        <div className="grid gap-1.5">
-          <Label htmlFor="c-nombre">Nombre</Label>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3">
+        <CampoA label="Nombre" htmlFor="c-nombre" className="col-span-2">
           <Input id="c-nombre" value={c.nombre ?? ''} onChange={(e) => set('nombre', e.target.value)} />
-        </div>
-        <div className="grid grid-cols-[auto_1fr_1fr] items-end gap-3">
-          <MarcaIcono logo={c.logo} icono={c.icono ?? categorias.find((k) => k.id === c.categoria_id)?.icono} color={categorias.find((k) => k.id === c.categoria_id)?.color ?? '#64748b'} size="lg" key={`${c.logo}-${c.icono}`} />
-          <div className="grid gap-1.5">
-            <Label htmlFor="c-logo">Sitio web (logo)</Label>
-            <Input id="c-logo" placeholder="ej. claro.com.co" value={c.logo ?? ''} onChange={(e) => set('logo', e.target.value)} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Icono (sin logo)</Label>
-            <Select value={c.icono ?? 'circle'} onValueChange={(v) => set('icono', v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(ICONOS).map(([k, Icon]) => (
-                  <SelectItem key={k} value={k}>
-                    <Icon /> {k}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <p className="-mt-2 text-xs text-muted-foreground">Si escribes el sitio web de la empresa se muestra su logo; si no, el icono isométrico.</p>
-        <div className="grid gap-1.5">
-          <Label>¿De quién es el gasto?</Label>
-          <Select value={c.responsable ?? 'Familiar'} onValueChange={(v) => set('responsable', v)}>
+        </CampoA>
+        <CampoA label="¿De quién es el gasto?" className="col-span-2 sm:col-span-1">
+          <ToggleGroup type="single" variant="outline" size="sm" value={c.responsable ?? 'Familiar'} onValueChange={(v) => v && set('responsable', v)} className="h-8 w-full">
+            {config.responsables.map((r) => (
+              <ToggleGroupItem key={r} value={r} className="h-8 flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                {r}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </CampoA>
+
+        <CampoA label="Categoría">
+          <Select value={c.categoria_id} onValueChange={(v) => set('categoria_id', v)}>
             <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {config.responsables.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {r === 'Familiar' ? 'Gasto familiar' : `Gastos ${r}`}
+              {categorias.map((k) => (
+                <SelectItem key={k.id} value={k.id}>
+                  <span className="size-2 rounded-full" style={{ background: k.color }} />
+                  {k.nombre}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label>Categoría</Label>
-            <Select value={c.categoria_id} onValueChange={(v) => set('categoria_id', v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {categorias.map((k) => (
-                  <SelectItem key={k.id} value={k.id}>
-                    {k.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        </CampoA>
+        <CampoA label="Medio de pago">
+          <Select value={c.medio_pago ?? 'Efectivo'} onValueChange={(v) => set('medio_pago', v)}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MEDIOS_PAGO.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CampoA>
+        <CampoA label="Préstamo / deuda" className="col-span-2 sm:col-span-1">
+          <ObligacionSelect value={obl} onChange={setObl} />
+        </CampoA>
+
+        {obl === NUEVA_DEUDA && (
+          <div className="col-span-2 grid grid-cols-[1fr_auto] items-end gap-3 rounded-lg border border-primary/30 bg-primary/5 p-2.5 sm:col-span-3 sm:grid-cols-[1fr_1fr]">
+            <p className="text-xs text-muted-foreground">
+              Se creará la deuda <b className="text-foreground">{c.nombre?.trim() || '(escribe el nombre)'}</b> a nombre de{' '}
+              <b className="text-foreground">{c.responsable ?? 'Familiar'}</b>.
+            </p>
+            <CampoA label="Tipo de deuda">
+              <TipoDeudaSelect value={tipoNueva} onChange={setTipoNueva} />
+            </CampoA>
           </div>
-          <div className="grid gap-1.5">
-            <Label>Medio de pago</Label>
-            <Select value={c.medio_pago ?? 'Efectivo'} onValueChange={(v) => set('medio_pago', v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MEDIOS_PAGO.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        )}
+
+        <CampoA label="Valor mensual" htmlFor="c-valor">
+          <MoneyInput id="c-valor" value={Number(c.valor_base ?? 0)} onChange={(v) => set('valor_base', v)} />
+        </CampoA>
+        <CampoA label="Día límite de pago" htmlFor="c-dia">
+          <Input id="c-dia" inputMode="numeric" value={c.dia_limite ?? ''} onChange={(e) => set('dia_limite', Math.min(31, Number(e.target.value.replace(/\D/g, ''))) || null)} />
+        </CampoA>
+        <div className="col-span-2 flex items-center gap-4 sm:col-span-1">
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={c.recurrente ?? true} onCheckedChange={(v) => set('recurrente', v)} /> Recurrente
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={c.activo ?? true} onCheckedChange={(v) => set('activo', v)} /> Activo
+          </label>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="c-valor">Valor mensual</Label>
-            <MoneyInput id="c-valor" value={Number(c.valor_base ?? 0)} onChange={(v) => set('valor_base', v)} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="c-dia">Día límite de pago</Label>
-            <Input id="c-dia" inputMode="numeric" value={c.dia_limite ?? ''} onChange={(e) => set('dia_limite', Math.min(31, Number(e.target.value.replace(/\D/g, ''))) || null)} />
-          </div>
+
+        <div className="col-span-2 flex items-end gap-3 sm:col-span-1">
+          <MarcaIcono logo={c.logo} icono={c.icono ?? cat?.icono} color={cat?.color ?? '#64748b'} size="md" key={`${c.logo}-${c.icono}`} />
+          <CampoA label="Sitio web (logo)" htmlFor="c-logo" className="flex-1">
+            <Input id="c-logo" placeholder="claro.com.co" value={c.logo ?? ''} onChange={(e) => set('logo', e.target.value)} />
+          </CampoA>
         </div>
-        <div className="flex items-center justify-between rounded-xl border p-3">
-          <div>
-            <p className="text-sm font-medium">Recurrente</p>
-            <p className="text-xs text-muted-foreground">Se incluye al generar cada mes.</p>
-          </div>
-          <Switch checked={c.recurrente ?? true} onCheckedChange={(v) => set('recurrente', v)} />
-        </div>
-        <div className="flex items-center justify-between rounded-xl border p-3">
-          <p className="text-sm font-medium">Activo</p>
-          <Switch checked={c.activo ?? true} onCheckedChange={(v) => set('activo', v)} />
-        </div>
+        <CampoA label="Icono (si no hay logo)">
+          <Select value={c.icono ?? 'circle'} onValueChange={(v) => set('icono', v)}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(ICONOS).map(([k, Icon]) => (
+                <SelectItem key={k} value={k}>
+                  <Icon /> {k}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CampoA>
+        <CampoA label="Notas" htmlFor="c-notas">
+          <Input id="c-notas" value={c.notas ?? ''} onChange={(e) => set('notas', e.target.value)} />
+        </CampoA>
       </div>
     </ResponsiveModal>
   )
 }
+
+function CampoA({ label, htmlFor, className, children }: { label: string; htmlFor?: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={cn('grid min-w-0 gap-1', className)}>
+      <Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  )
+}
+
 
 function Categorias() {
   const { categorias, recargar } = useData()

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { addMonths, format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { ChevronDown, HandCoins, Landmark, Pencil, PiggyBank, Plus, TrendingDown } from 'lucide-react'
+import { ChevronDown, HandCoins, Landmark, Pencil, PiggyBank, Plus, Trash2, TrendingDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,10 +11,10 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import { KpiCard } from '@/components/kpi-card'
 import { limpiarDominio, MarcaIcono } from '@/components/marca-icono'
 import { MetasSeccion } from '@/components/metas'
+import { ResponsableBadge } from '@/components/responsable-badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { MoneyInput } from '@/components/money-input'
 import { ResponsiveModal } from '@/components/responsive-modal'
@@ -25,12 +25,14 @@ import { TIPOS_OBLIGACION, type ObligacionVista, type TipoObligacion } from '@/l
 import { cn } from '@/lib/utils'
 
 export function DeudasPage() {
-  const { obligaciones } = useData()
+  const { obligaciones, config } = useData()
   const [editando, setEditando] = useState<ObligacionVista | null>(null)
   const [nuevo, setNuevo] = useState(false)
+  const [persona, setPersona] = useState('todos')
 
-  const deudas = obligaciones.filter((o) => o.tipo !== 'cadena')
-  const ahorros = obligaciones.filter((o) => o.tipo === 'cadena')
+  const visibles = obligaciones.filter((o) => persona === 'todos' || (o.responsable || 'Familiar') === persona)
+  const deudas = visibles.filter((o) => o.tipo !== 'cadena')
+  const ahorros = visibles.filter((o) => o.tipo === 'cadena')
   const saldoTotal = deudas.reduce((s, o) => s + Number(o.saldo_actual ?? 0), 0)
   const cuotaTotal = deudas.filter((o) => o.activo).reduce((s, o) => s + Number(o.cuota ?? 0), 0)
   const pagadoTotal = deudas.reduce((s, o) => s + Number(o.total_pagado), 0)
@@ -47,6 +49,17 @@ export function DeudasPage() {
           <Plus /> Nueva obligación
         </Button>
       </div>
+
+      <ToggleGroup type="single" variant="outline" size="sm" value={persona} onValueChange={(v) => setPersona(v || 'todos')} className="w-full sm:w-auto">
+        {['todos', ...config.responsables].map((r) => (
+          <ToggleGroupItem key={r} value={r} className="flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:flex-none">
+            {r === 'todos' ? 'Todas' : r === 'Familiar' ? 'Familiares' : r}
+            <span className="ml-1 text-[10px] opacity-70">
+              ({obligaciones.filter((o) => r === 'todos' || (o.responsable || 'Familiar') === r).length})
+            </span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard solid label="Saldo total adeudado" value={money(saldoTotal)} icon={Landmark} tone="bad" />
@@ -162,16 +175,20 @@ function TarjetaObligacion({ o, onEdit }: { o: ObligacionVista; onEdit: () => vo
           <MarcaIcono logo={o.logo} icono={o.tipo === 'cadena' ? 'users' : o.tipo === 'tarjeta' ? 'credit-card' : 'landmark'} color={COLOR_TIPO[o.tipo]} size="lg" />
           <div className="min-w-0 flex-1">
             <CardTitle className="truncate">{o.nombre}</CardTitle>
-            <CardDescription>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <ResponsableBadge nombre={o.responsable} />
+              <Badge
+                variant="outline"
+                className="h-5 px-1.5 text-[10px]"
+                style={{ color: COLOR_TIPO[o.tipo], borderColor: `color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 45%, transparent)`, background: `color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 12%, transparent)` }}
+              >
+                {TIPOS_OBLIGACION[o.tipo]}
+              </Badge>
+            </div>
+            <CardDescription className="mt-1">
               {o.entidad ?? '—'} · cuota {money(o.cuota)}
             </CardDescription>
           </div>
-          <Badge
-            variant="outline"
-            style={{ color: COLOR_TIPO[o.tipo], borderColor: `color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 45%, transparent)`, background: `color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 12%, transparent)` }}
-          >
-            {TIPOS_OBLIGACION[o.tipo]}
-          </Badge>
           <Button variant="ghost" size="icon-sm" aria-label="Editar" onClick={onEdit}>
             <Pencil />
           </Button>
@@ -244,7 +261,7 @@ function Dato({ label, value }: { label: string; value: string }) {
 }
 
 function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligacion: ObligacionVista | null; onClose: () => void }) {
-  const { categorias, conceptos, recargar } = useData()
+  const { categorias, conceptos, config, recargar } = useData()
   const [f, setF] = useState({
     nombre: '',
     entidad: '',
@@ -258,6 +275,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
     activo: true,
     notas: '',
     logo: '',
+    responsable: 'Familiar',
   })
   const [crearConcepto, setCrearConcepto] = useState(true)
   const [dia, setDia] = useState('5')
@@ -277,6 +295,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
       activo: obligacion?.activo ?? true,
       notas: obligacion?.notas ?? '',
       logo: obligacion?.logo ?? '',
+      responsable: obligacion?.responsable ?? 'Familiar',
     })
     setCrearConcepto(!obligacion)
   }, [open, obligacion])
@@ -298,6 +317,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
         activo: f.activo,
         notas: f.notas.trim() || null,
         logo: limpiarDominio(f.logo),
+        responsable: f.responsable,
       }
       const creada = await guardarObligacion(datos)
       if (creada && crearConcepto) {
@@ -309,6 +329,7 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
           medio_pago: f.entidad || null,
           valor_base: f.cuota,
           logo: datos.logo,
+          responsable: f.responsable,
           dia_limite: Number(dia) || null,
           recurrente: true,
           orden: conceptos.length + 1,
@@ -341,8 +362,16 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
     <ResponsiveModal
       open={open}
       onOpenChange={(v) => !v && onClose()}
+      ancho="lg"
       title={obligacion ? `Editar ${obligacion.nombre}` : 'Nueva obligación'}
       description="Préstamo, tarjeta, compra a cuotas o cadena de ahorro."
+      footerStart={
+        obligacion && (
+          <Button variant="destructive" onClick={borrar}>
+            <Trash2 /> Eliminar
+          </Button>
+        )
+      }
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
@@ -352,99 +381,100 @@ function ObligacionForm({ open, obligacion, onClose }: { open: boolean; obligaci
         </>
       }
     >
-      <div className="grid gap-4 py-1">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="o-nombre">Nombre</Label>
-            <Input id="o-nombre" value={f.nombre} onChange={(e) => set('nombre', e.target.value)} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="o-entidad">Entidad / persona</Label>
-            <Input id="o-entidad" value={f.entidad} onChange={(e) => set('entidad', e.target.value)} />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label>Tipo</Label>
-            <Select value={f.tipo} onValueChange={(v) => set('tipo', v as TipoObligacion)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(TIPOS_OBLIGACION).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="o-cuota">{esCadena ? 'Aporte mensual' : 'Cuota mensual'}</Label>
-            <MoneyInput id="o-cuota" value={f.cuota} onChange={(v) => set('cuota', v)} />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="o-saldo">{esCadena ? 'Aportado antes de usar la app' : 'Saldo actual'}</Label>
-            <MoneyInput id="o-saldo" value={f.saldo_inicial} onChange={(v) => set('saldo_inicial', v)} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="o-fsaldo">Saldo con corte al</Label>
-            <Input id="o-fsaldo" type="date" value={f.fecha_saldo} onChange={(e) => set('fecha_saldo', e.target.value)} />
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3">
+        <CampoO label="Nombre" htmlFor="o-nombre">
+          <Input id="o-nombre" value={f.nombre} onChange={(e) => set('nombre', e.target.value)} />
+        </CampoO>
+        <CampoO label="Entidad / persona" htmlFor="o-entidad">
+          <Input id="o-entidad" value={f.entidad} onChange={(e) => set('entidad', e.target.value)} />
+        </CampoO>
+        <CampoO label="¿A nombre de quién?" className="col-span-2 sm:col-span-1">
+          <ToggleGroup type="single" variant="outline" size="sm" value={f.responsable} onValueChange={(v) => v && set('responsable', v)} className="h-8 w-full">
+            {config.responsables.map((r) => (
+              <ToggleGroupItem key={r} value={r} className="h-8 flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                {r}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </CampoO>
+
+        <CampoO label="Tipo">
+          <Select value={f.tipo} onValueChange={(v) => set('tipo', v as TipoObligacion)}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(TIPOS_OBLIGACION).map(([k, v]) => (
+                <SelectItem key={k} value={k}>
+                  {v}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CampoO>
+        <CampoO label={esCadena ? 'Aporte mensual' : 'Cuota mensual'} htmlFor="o-cuota">
+          <MoneyInput id="o-cuota" value={f.cuota} onChange={(v) => set('cuota', v)} />
+        </CampoO>
+        <CampoO label={esCadena ? 'Aportado antes de la app' : 'Saldo actual'} htmlFor="o-saldo" className="col-span-2 sm:col-span-1">
+          <MoneyInput id="o-saldo" value={f.saldo_inicial} onChange={(v) => set('saldo_inicial', v)} />
+        </CampoO>
+
+        <CampoO label="Saldo con corte al" htmlFor="o-fsaldo">
+          <Input id="o-fsaldo" type="date" value={f.fecha_saldo} onChange={(e) => set('fecha_saldo', e.target.value)} />
+        </CampoO>
         {esCadena ? (
-          <div className="grid gap-1.5">
-            <Label htmlFor="o-cobro">Fecha de mi turno de cobro</Label>
+          <CampoO label="Mi turno de cobro" htmlFor="o-cobro" className="sm:col-span-2">
             <Input id="o-cobro" type="date" value={f.fecha_cobro} onChange={(e) => set('fecha_cobro', e.target.value)} />
-          </div>
+          </CampoO>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="o-tasa">Tasa mensual %</Label>
+          <>
+            <CampoO label="Tasa mensual %" htmlFor="o-tasa">
               <Input id="o-tasa" inputMode="decimal" value={f.tasa_mensual} onChange={(e) => set('tasa_mensual', e.target.value.replace(',', '.'))} />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="o-ncuotas">Cuotas restantes</Label>
+            </CampoO>
+            <CampoO label="Cuotas restantes" htmlFor="o-ncuotas" className="col-span-2 sm:col-span-1">
               <Input id="o-ncuotas" inputMode="numeric" value={f.num_cuotas} onChange={(e) => set('num_cuotas', e.target.value.replace(/\D/g, ''))} />
-            </div>
-          </div>
+            </CampoO>
+          </>
         )}
-        <div className="flex items-end gap-3">
-          <MarcaIcono logo={f.logo} icono="landmark" color={COLOR_TIPO[f.tipo]} size="lg" key={f.logo} />
-          <div className="grid flex-1 gap-1.5">
-            <Label htmlFor="o-logo">Sitio web de la entidad (logo)</Label>
-            <Input id="o-logo" placeholder="ej. davivienda.com" value={f.logo} onChange={(e) => set('logo', e.target.value)} />
-          </div>
+
+        <div className="col-span-2 flex items-end gap-3 sm:col-span-1">
+          <MarcaIcono logo={f.logo} icono="landmark" color={COLOR_TIPO[f.tipo]} size="md" key={f.logo} />
+          <CampoO label="Sitio web (logo)" htmlFor="o-logo" className="flex-1">
+            <Input id="o-logo" placeholder="davivienda.com" value={f.logo} onChange={(e) => set('logo', e.target.value)} />
+          </CampoO>
         </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="o-notas">Notas</Label>
-          <Textarea id="o-notas" rows={2} value={f.notas} onChange={(e) => set('notas', e.target.value)} />
-        </div>
-        <div className="flex items-center justify-between rounded-xl border p-3">
-          <div>
-            <p className="text-sm font-medium">Activa</p>
-            <p className="text-xs text-muted-foreground">Desactívala cuando termines de pagarla.</p>
-          </div>
+        <CampoO label="Notas" htmlFor="o-notas" className="col-span-2">
+          <Input id="o-notas" value={f.notas} onChange={(e) => set('notas', e.target.value)} />
+        </CampoO>
+
+        <label className="col-span-2 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm sm:col-span-1">
+          <span>
+            <b className="font-medium">Activa</b> <span className="text-xs text-muted-foreground">· desactívala al terminar de pagar</span>
+          </span>
           <Switch checked={f.activo} onCheckedChange={(v) => set('activo', v)} />
-        </div>
+        </label>
         {!obligacion && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
-            <div className="flex-1">
-              <p className="text-sm font-medium">Agregar a la plantilla mensual</p>
-              <p className="text-xs text-muted-foreground">Crea el gasto recurrente con esta cuota.</p>
-            </div>
-            {crearConcepto && <Input className="w-20" inputMode="numeric" value={dia} onChange={(e) => setDia(e.target.value.replace(/\D/g, ''))} aria-label="Día límite" placeholder="Día" />}
+          <div className="col-span-2 flex items-center gap-3 rounded-lg border px-3 py-2 text-sm">
+            <span className="flex-1">
+              <b className="font-medium">Agregar a la plantilla mensual</b>{' '}
+              <span className="text-xs text-muted-foreground">· crea el gasto recurrente con esta cuota</span>
+            </span>
+            {crearConcepto && <Input className="h-8 w-16" inputMode="numeric" value={dia} onChange={(e) => setDia(e.target.value.replace(/\D/g, ''))} aria-label="Día límite" placeholder="Día" />}
             <Switch checked={crearConcepto} onCheckedChange={setCrearConcepto} />
           </div>
         )}
-        {obligacion && (
-          <Button variant="destructive" size="sm" className="justify-self-start" onClick={borrar}>
-            Eliminar obligación
-          </Button>
-        )}
       </div>
     </ResponsiveModal>
+  )
+}
+
+function CampoO({ label, htmlFor, className, children }: { label: string; htmlFor?: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={cn('grid min-w-0 gap-1', className)}>
+      <Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
   )
 }

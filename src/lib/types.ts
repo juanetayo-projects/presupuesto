@@ -86,6 +86,7 @@ export interface Obligacion {
   activo: boolean
   notas: string | null
   logo: string | null
+  responsable: string
 }
 
 export interface ObligacionVista extends Obligacion {
