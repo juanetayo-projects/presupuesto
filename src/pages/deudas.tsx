@@ -48,7 +48,7 @@ export function DeudasPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Saldo total adeudado" value={money(saldoTotal)} icon={Landmark} tone="bad" />
+        <KpiCard solid label="Saldo total adeudado" value={money(saldoTotal)} icon={Landmark} tone="bad" />
         <KpiCard label="Cuotas al mes" value={money(cuotaTotal)} icon={HandCoins} tone="warn" />
         <KpiCard label="Pagado a la fecha" value={money(pagadoTotal)} icon={TrendingDown} tone="good" />
         <KpiCard label="Ahorrado en cadenas" value={money(ahorrado)} icon={PiggyBank} tone="brand" />

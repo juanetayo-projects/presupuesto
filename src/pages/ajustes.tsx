@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryIcon, ICONOS } from '@/components/category-icon'
+import { IngresosCard } from '@/components/ingresos'
 import { MoneyInput } from '@/components/money-input'
 import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
-import { agregarMiembro, eliminarCategoria, eliminarIngreso, eliminarMiembro, guardarCategoria, guardarConcepto, guardarConfig, guardarIngreso } from '@/lib/api'
-import { money, nombreMes } from '@/lib/format'
+import { agregarMiembro, eliminarCategoria, eliminarMiembro, guardarCategoria, guardarConcepto, guardarConfig } from '@/lib/api'
+import { money } from '@/lib/format'
 import { CLASES, MEDIOS_PAGO, type ClaseCategoria, type Concepto } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -54,17 +55,14 @@ export function AjustesPage() {
 }
 
 function Ingresos() {
-  const { periodo, ingresos, config, recargar } = useData()
-  const delMes = ingresos.filter((i) => i.periodo === periodo)
+  const { config, recargar } = useData()
   const [base, setBase] = useState(config.ingresoBase)
-  const [desc, setDesc] = useState('')
-  const [valor, setValor] = useState(0)
   useEffect(() => setBase(config.ingresoBase), [config.ingresoBase])
 
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
+  async function guardarBase() {
     try {
-      await fn()
-      toast.success(ok)
+      await guardarConfig('ingreso_base', base)
+      toast.success('Ingreso base actualizado')
       await recargar()
     } catch (e) {
       toast.error('No se pudo guardar', { description: (e as Error).message })
@@ -72,49 +70,16 @@ function Ingresos() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
+      <IngresosCard />
       <Card>
         <CardHeader>
           <CardTitle>Ingreso base mensual</CardTitle>
-          <CardDescription>Se usa al generar cada mes nuevo.</CardDescription>
+          <CardDescription>Se agrega automáticamente al generar un mes que no tenga ingresos.</CardDescription>
         </CardHeader>
         <CardContent className="flex gap-2">
           <MoneyInput value={base} onChange={setBase} className="flex-1" />
-          <Button onClick={() => run(() => guardarConfig('ingreso_base', base), 'Ingreso base actualizado')}>Guardar</Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Ingresos de {nombreMes(periodo)}</CardTitle>
-          <CardDescription>Salario, primas, ingresos extra…</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {delMes.map((i) => (
-            <div key={i.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-              <span className="flex-1">{i.descripcion}</span>
-              <span className="font-medium tabular-nums">{money(i.valor)}</span>
-              <Button variant="ghost" size="icon-sm" aria-label="Eliminar" onClick={() => run(() => eliminarIngreso(i.id), 'Ingreso eliminado')}>
-                <Trash2 />
-              </Button>
-            </div>
-          ))}
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Input placeholder="Descripción (ej. Prima)" value={desc} onChange={(e) => setDesc(e.target.value)} className="min-w-40 flex-1" />
-            <MoneyInput value={valor} onChange={setValor} className="w-36" />
-            <Button
-              variant="outline"
-              disabled={!desc || !valor}
-              onClick={() =>
-                run(async () => {
-                  await guardarIngreso({ periodo, descripcion: desc, valor })
-                  setDesc('')
-                  setValor(0)
-                }, 'Ingreso agregado')
-              }
-            >
-              <Plus /> Agregar
-            </Button>
-          </div>
+          <Button onClick={guardarBase}>Guardar</Button>
         </CardContent>
       </Card>
     </div>

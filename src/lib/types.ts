@@ -59,7 +59,12 @@ export interface Ingreso {
   periodo: string
   descripcion: string
   valor: number
+  tipo: string
+  notas: string | null
+  grupo: string | null
 }
+
+export const TIPOS_INGRESO = ['Salario', 'Honorarios', 'Prima', 'Arriendo', 'Pensión', 'Ventas / negocio', 'Bonificación', 'Reembolso', 'Otro']
 
 export interface Obligacion {
   id: string

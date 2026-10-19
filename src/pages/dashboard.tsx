@@ -10,28 +10,34 @@ import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/
 import { Skeleton } from '@/components/ui/skeleton'
 import { CategoryIcon } from '@/components/category-icon'
 import { FilterBar } from '@/components/filter-bar'
+import { IngresoForm } from '@/components/ingresos'
 import { KpiCard } from '@/components/kpi-card'
+import { MesAMes } from '@/components/mes-a-mes'
 import { MetasResumen } from '@/components/metas'
 import { Regla503020 } from '@/components/regla-503020'
-import { useData } from '@/context/data'
+import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
 import { useAlertasNavegador } from '@/hooks/use-alertas'
 import { copiarMesAnterior, generarMes } from '@/lib/api'
 import { exportarMesExcel } from '@/lib/export'
 import { diasHasta, fechaCorta, mesCorto, money, moneyShort, nombreMes, pct, pctLabel, periodoMas } from '@/lib/format'
 import { aplicarFiltros, porCategoria, porConcepto, resumen, valorGasto } from '@/lib/metrics'
+import type { Ingreso } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export function DashboardPage() {
-  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, filtros, config, catPorId, recargar } = useData()
+  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, catPorId, recargar } = useData()
+  const [filtros] = useFiltros('inicio')
   const { pagar } = useUi()
   const { alertas } = useAlertasNavegador()
   const [generando, setGenerando] = useState(false)
+  const [nuevoIngreso, setNuevoIngreso] = useState<Partial<Ingreso> | null>(null)
 
   const gastosMes = useMemo(() => gastos.filter((g) => g.periodo === periodo), [gastos, periodo])
   const ingresosMes = useMemo(() => ingresos.filter((i) => i.periodo === periodo), [ingresos, periodo])
   const filtrados = useMemo(() => aplicarFiltros(gastosMes, { ...filtros, texto: '' }, config.diasAlerta), [gastosMes, filtros, config.diasAlerta])
   const r = useMemo(() => resumen(filtrados, ingresosMes), [filtrados, ingresosMes])
+  const todosFiltrados = useMemo(() => aplicarFiltros(gastos, { ...filtros, texto: '' }, config.diasAlerta), [gastos, filtros, config.diasAlerta])
   const cats = useMemo(() => porCategoria(filtrados, categorias), [filtrados, categorias])
   const items = useMemo(() => porConcepto(filtrados, catPorId), [filtrados, catPorId])
 
@@ -128,10 +134,18 @@ export function DashboardPage() {
         </Button>
       </div>
 
-      <FilterBar buscar={false} />
+      <FilterBar pagina="inicio" buscar={false} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiCard label="Ingreso del mes" value={money(r.ingreso)} icon={Wallet} tone="brand" hint={`${ingresosMes.length} registro(s) de ingreso`} />
+        <KpiCard
+          solid
+          label="Ingreso del mes"
+          value={money(r.ingreso)}
+          icon={Wallet}
+          tone="brand"
+          hint={`${ingresosMes.length} ingreso(s) · toca para agregar`}
+          onClick={() => setNuevoIngreso({ periodo, tipo: 'Otro', valor: 0 })}
+        />
         <KpiCard
           label="Total gastos"
           value={money(r.total)}
@@ -143,6 +157,7 @@ export function DashboardPage() {
         <KpiCard label="Pagado" value={money(r.pagado)} icon={CheckCircle2} tone="good" progress={ejecucion} hint={`${r.nPagados} de ${r.n} · ${pctLabel(r.pagado, r.presupuestado)} ejecutado`} />
         <KpiCard label="Por pagar" value={money(r.pendiente)} icon={ArrowDownRight} tone="warn" hint={`${r.nPendientes} pago(s) pendiente(s)`} />
         <KpiCard
+          solid
           label="Disponible"
           value={money(r.disponible)}
           icon={PiggyBank}
@@ -205,7 +220,7 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent className="grid items-center gap-4 sm:grid-cols-[180px_1fr]">
             <DonutCategorias data={cats} total={r.total} />
-            <ul className="space-y-2.5">
+            <ul className="min-w-0 space-y-2.5">
               {cats.map((c) => (
                 <li key={c.key} className="text-sm">
                   <div className="flex items-center gap-2">
@@ -249,6 +264,8 @@ export function DashboardPage() {
         </Card>
       </div>
 
+      <MesAMes periodo={periodo} gastos={todosFiltrados} categorias={categorias} />
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Regla503020 gastos={filtrados} ingreso={r.ingreso} catPorId={catPorId} />
         <MetasResumen />
@@ -287,6 +304,7 @@ export function DashboardPage() {
             ))}
         </CardContent>
       </Card>
+      <IngresoForm ingreso={nuevoIngreso} onClose={() => setNuevoIngreso(null)} />
     </div>
   )
 }

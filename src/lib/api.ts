@@ -72,7 +72,7 @@ export async function generarMes(periodo: string, conceptos: Concepto[], gastosM
     }))
   if (nuevos.length) check(await supabase.from('gastos').insert(nuevos))
   if (ingresosMes.length === 0) {
-    check(await supabase.from('ingresos').insert({ periodo, descripcion: 'Ingreso base', valor: ingresoBase }))
+    check(await supabase.from('ingresos').insert({ periodo, descripcion: 'Ingreso base', tipo: 'Salario', valor: ingresoBase }))
   }
   return nuevos.length
 }
@@ -160,6 +160,18 @@ export async function guardarIngreso(i: Partial<Ingreso>) {
   else check(await supabase.from('ingresos').insert(rest))
 }
 
+/** Crea un ingreso; si meses > 1 lo repite en los meses siguientes con un mismo grupo. */
+export async function crearIngresos(i: Pick<Ingreso, 'periodo' | 'descripcion' | 'tipo' | 'valor' | 'notas'>, meses = 1) {
+  const grupo = meses > 1 ? crypto.randomUUID() : null
+  const filas = Array.from({ length: meses }, (_, k) => ({ ...i, periodo: periodoMas(i.periodo, k), grupo }))
+  check(await supabase.from('ingresos').insert(filas))
+}
+
+/** Borra los ingresos del grupo desde el mes indicado en adelante. */
+export async function eliminarIngresosGrupo(grupo: string, desde: string) {
+  check(await supabase.from('ingresos').delete().eq('grupo', grupo).gte('periodo', desde))
+}
+
 export async function eliminarIngreso(id: string) {
   check(await supabase.from('ingresos').delete().eq('id', id))
 }
@@ -202,7 +214,7 @@ export async function copiarMesAnterior(periodo: string, anteriores: Gasto[], in
     }))
   if (filas.length) check(await supabase.from('gastos').insert(filas))
   if (ingresosMes.length === 0 && ingresosAnt.length) {
-    check(await supabase.from('ingresos').insert(ingresosAnt.map((i) => ({ periodo, descripcion: i.descripcion, valor: i.valor }))))
+    check(await supabase.from('ingresos').insert(ingresosAnt.map((i) => ({ periodo, descripcion: i.descripcion, tipo: i.tipo, valor: i.valor, notas: i.notas }))))
   }
   return filas.length
 }

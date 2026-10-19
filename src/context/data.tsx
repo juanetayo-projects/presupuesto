@@ -25,8 +25,8 @@ interface DataState {
   config: { ingresoBase: number; diasAlerta: number; pctImprevistos: number }
   periodo: string
   setPeriodo: (p: string) => void
-  filtros: Filtros
-  setFiltros: (f: Filtros) => void
+  filtros: Record<string, Filtros>
+  setFiltros: (pagina: string, f: Filtros) => void
   recargar: () => Promise<void>
   catPorId: Map<string, Categoria>
 }
@@ -45,7 +45,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<Awaited<ReturnType<typeof cargarTodo>> | null>(null)
   const [periodo, setPeriodoState] = useState(leerPeriodo)
-  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS)
+  // Cada página (inicio, gastos) tiene sus propios filtros: no se arrastran de una a otra.
+  const [filtros, setFiltrosState] = useState<Record<string, Filtros>>({})
+  const setFiltros = useCallback((pagina: string, f: Filtros) => setFiltrosState((x) => ({ ...x, [pagina]: f })), [])
 
   const recargar = useCallback(async () => {
     try {
@@ -93,3 +95,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 }
 
 export const useData = () => useContext(Ctx)
+
+export function useFiltros(pagina: string): [Filtros, (f: Filtros) => void] {
+  const { filtros, setFiltros } = useData()
+  return [filtros[pagina] ?? FILTROS_VACIOS, (f: Filtros) => setFiltros(pagina, f)]
+}

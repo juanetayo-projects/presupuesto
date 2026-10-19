@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CategoryIcon } from '@/components/category-icon'
 import { FilterBar } from '@/components/filter-bar'
-import { useData } from '@/context/data'
+import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
 import { deshacerPago, generarMes } from '@/lib/api'
 import { diasHasta, fechaCorta, money, nombreMes, pctLabel } from '@/lib/format'
@@ -19,7 +19,8 @@ import type { Gasto } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export function GastosPage() {
-  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, filtros, config, recargar } = useData()
+  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, recargar } = useData()
+  const [filtros] = useFiltros('gastos')
   const { abrirGasto } = useUi()
   const [generando, setGenerando] = useState(false)
   const [vista, setVista] = useState<'lista' | 'calendario'>(() => {
@@ -110,7 +111,7 @@ export function GastosPage() {
         </div>
       </div>
 
-      <FilterBar />
+      <FilterBar pagina="gastos" />
 
       {loading && <Skeleton className="h-64 rounded-xl" />}
 
