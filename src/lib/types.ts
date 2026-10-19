@@ -31,6 +31,7 @@ export interface Concepto {
   activo: boolean
   orden: number
   notas: string | null
+  responsable: string
 }
 
 export interface Gasto {
@@ -52,6 +53,7 @@ export interface Gasto {
   cuotas_total: number | null
   notas: string | null
   pagado_por: string | null
+  responsable: string
 }
 
 export interface Ingreso {
@@ -104,7 +106,9 @@ export const TIPOS_OBLIGACION: Record<TipoObligacion, string> = {
   otro: 'Por definir',
 }
 
-export const MEDIOS_PAGO = ['Davivienda', 'Bancolombia', 'Nequi', 'Daviplata', 'Efectivo', 'Otro']
+export const MEDIOS_PAGO = ['Davivienda', 'Bancolombia', 'Nu', 'Sistecredito', 'ADDI', 'Nequi', 'Daviplata', 'Efectivo', 'Otro']
+
+export const RESPONSABLES_DEFAULT = ['Familiar', 'Pily', 'Juank']
 
 export interface Meta {
   id: string

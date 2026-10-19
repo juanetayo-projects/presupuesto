@@ -26,14 +26,14 @@ export function MetasResumen() {
   const { metas } = useData()
   const activas = metas.filter((m) => m.activo)
   return (
-    <Card className="lg:col-span-2">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Target className="size-4 text-primary" /> Metas de ahorro
         </CardTitle>
         <CardDescription>Progreso hacia cada objetivo</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
+      <CardContent className="grid gap-3">
         {activas.length === 0 && <p className="text-sm text-muted-foreground">Aún no hay metas.</p>}
         {activas.map((m) => (
           <BarraMeta key={m.id} m={m} />

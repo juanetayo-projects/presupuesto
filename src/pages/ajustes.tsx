@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryIcon, ICONOS } from '@/components/category-icon'
 import { IngresosCard } from '@/components/ingresos'
 import { MoneyInput } from '@/components/money-input'
+import { ResponsableBadge } from '@/components/responsable-badge'
 import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
 import { agregarMiembro, eliminarCategoria, eliminarMiembro, guardarCategoria, guardarConcepto, guardarConfig } from '@/lib/api'
@@ -152,6 +153,7 @@ function Plantilla() {
                       {c.medio_pago ?? '—'} · {c.dia_limite ? `día ${c.dia_limite}` : 'sin día límite'}
                     </p>
                   </div>
+                  <ResponsableBadge nombre={c.responsable} />
                   {!c.recurrente && c.activo && <Badge variant="outline">Eventual</Badge>}
                   {!c.activo && <Badge variant="secondary">Inactivo</Badge>}
                   {c.activo && Number(c.valor_base) === 0 && <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-amber-300">Definir valor</Badge>}
@@ -169,7 +171,7 @@ function Plantilla() {
 }
 
 function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | null; onClose: () => void }) {
-  const { categorias, recargar } = useData()
+  const { categorias, config, recargar } = useData()
   const [c, setC] = useState<Partial<Concepto>>({})
   useEffect(() => setC(concepto ?? {}), [concepto])
   const set = <K extends keyof Concepto>(k: K, v: Concepto[K]) => setC((x) => ({ ...x, [k]: v }))
@@ -187,6 +189,7 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
         recurrente: c.recurrente ?? true,
         activo: c.activo ?? true,
         notas: c.notas ?? null,
+        responsable: c.responsable ?? 'Familiar',
       })
       toast.success('Concepto guardado')
       await recargar()
@@ -214,6 +217,21 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
         <div className="grid gap-1.5">
           <Label htmlFor="c-nombre">Nombre</Label>
           <Input id="c-nombre" value={c.nombre ?? ''} onChange={(e) => set('nombre', e.target.value)} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>¿De quién es el gasto?</Label>
+          <Select value={c.responsable ?? 'Familiar'} onValueChange={(v) => set('responsable', v)}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {config.responsables.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r === 'Familiar' ? 'Gasto familiar' : `Gastos ${r}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">

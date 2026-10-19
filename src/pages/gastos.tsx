@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CalendarClock, CalendarDays, Check, CopyPlus, Download, Layers, List, Pencil, Plus, Undo2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Pencil, Plus, Undo2 } from 'lucide-react'
+import { ResponsableBadge } from '@/components/responsable-badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CalendarioPagos } from '@/components/calendario-pagos'
 import { exportarMesExcel } from '@/lib/export'
@@ -21,6 +22,29 @@ import { cn } from '@/lib/utils'
 export function GastosPage() {
   const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, recargar } = useData()
   const [filtros] = useFiltros('gastos')
+  // Categorías contraídas (se recuerdan en este dispositivo). Al buscar texto se muestran todas abiertas.
+  const [contraidas, setContraidas] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('ppto.contraidas') ?? '[]'))
+    } catch {
+      return new Set()
+    }
+  })
+  const guardarContraidas = (n: Set<string>) => {
+    setContraidas(n)
+    try {
+      localStorage.setItem('ppto.contraidas', JSON.stringify([...n]))
+    } catch {
+      /* sin almacenamiento */
+    }
+  }
+  const alternar = (id: string) => {
+    const n = new Set(contraidas)
+    if (n.has(id)) n.delete(id)
+    else n.add(id)
+    guardarContraidas(n)
+  }
+  const buscando = filtros.texto.trim() !== ''
   const { abrirGasto } = useUi()
   const [generando, setGenerando] = useState(false)
   const [vista, setVista] = useState<'lista' | 'calendario'>(() => {
@@ -123,23 +147,55 @@ export function GastosPage() {
 
       {!loading && vista === 'calendario' && <CalendarioPagos periodo={periodo} gastos={lista} diasAlerta={config.diasAlerta} onSelect={abrirGasto} />}
 
-      {vista === 'lista' && grupos.map(({ c, items, total }) => (
-        <section key={c.id} className="space-y-2">
-          <div className="flex items-center gap-2 px-1">
-            <CategoryIcon icono={c.icono} color={c.color} size="sm" />
-            <h3 className="text-sm font-semibold">{c.nombre}</h3>
-            <span className="ml-auto text-sm font-medium tabular-nums">{money(total)}</span>
-            <Badge variant="secondary" className="tabular-nums">
-              {pctLabel(total, totalMes)}
-            </Badge>
-          </div>
-          <Card className="gap-0 divide-y overflow-hidden py-0">
-            {items.map((g) => (
-              <FilaGasto key={g.id} g={g} />
-            ))}
-          </Card>
-        </section>
-      ))}
+      {vista === 'lista' && grupos.length > 1 && !buscando && (
+        <div className="flex justify-end">
+          {contraidas.size < grupos.length ? (
+            <Button variant="ghost" size="sm" onClick={() => guardarContraidas(new Set(grupos.map((x) => x.c.id)))}>
+              <ChevronsDownUp /> Contraer todo
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => guardarContraidas(new Set())}>
+              <ChevronsUpDown /> Expandir todo
+            </Button>
+          )}
+        </div>
+      )}
+
+      {vista === 'lista' &&
+        grupos.map(({ c, items, total }) => {
+          const abierta = buscando || !contraidas.has(c.id)
+          const pendientes = items.filter((g) => g.estado === 'pendiente').length
+          return (
+            <section key={c.id} className="overflow-hidden rounded-xl border bg-card shadow-xs">
+              <button
+                onClick={() => alternar(c.id)}
+                aria-expanded={abierta}
+                className="flex w-full items-center gap-2 border-l-4 px-3 py-2.5 text-left transition-colors hover:brightness-95 sm:px-4"
+                style={{ borderLeftColor: c.color, background: `color-mix(in srgb, ${c.color} 9%, var(--card))` }}
+              >
+                <CategoryIcon icono={c.icono} color={c.color} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold">{c.nombre}</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    {items.length} gasto(s){pendientes ? ` · ${pendientes} pendiente(s)` : ' · todo pagado'}
+                  </p>
+                </div>
+                <span className="text-sm font-semibold tabular-nums">{money(total)}</span>
+                <Badge variant="secondary" className="tabular-nums">
+                  {pctLabel(total, totalMes)}
+                </Badge>
+                <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', !abierta && '-rotate-90')} />
+              </button>
+              {abierta && (
+                <div className="divide-y border-t">
+                  {items.map((g) => (
+                    <FilaGasto key={g.id} g={g} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        })}
     </div>
   )
 }
@@ -180,6 +236,7 @@ function FilaGasto({ g }: { g: Gasto }) {
               Definir valor
             </Badge>
           )}
+          {g.responsable && g.responsable !== 'Familiar' && <ResponsableBadge nombre={g.responsable} />}
           {g.cuotas_total && (
             <Badge variant="outline" className="shrink-0 px-1.5 text-[10px]">
               <Layers /> {g.cuota_num}/{g.cuotas_total}

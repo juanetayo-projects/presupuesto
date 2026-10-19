@@ -125,6 +125,15 @@ function Estrategia({ deudas }: { deudas: ObligacionVista[] }) {
   )
 }
 
+/** Color de acento por tipo de obligación (misma paleta validada de las categorías). */
+const COLOR_TIPO: Record<TipoObligacion, string> = {
+  prestamo: '#2a78d6',
+  tarjeta: '#6250d6',
+  credito_cuotas: '#eb6834',
+  cadena: '#008300',
+  otro: '#64748b',
+}
+
 function TarjetaObligacion({ o, onEdit }: { o: ObligacionVista; onEdit: () => void }) {
   const { gastos } = useData()
   const [verPagos, setVerPagos] = useState(false)
@@ -139,7 +148,14 @@ function TarjetaObligacion({ o, onEdit }: { o: ObligacionVista; onEdit: () => vo
   const fin = mesesRestantes ? format(addMonths(new Date(), mesesRestantes), 'MMM yyyy', { locale: es }) : null
 
   return (
-    <Card className={cn('gap-3', !o.activo && 'opacity-60')}>
+    <Card
+      className={cn('gap-3 border-l-4 shadow-md', !o.activo && 'opacity-60')}
+      style={{
+        borderLeftColor: COLOR_TIPO[o.tipo],
+        background: `linear-gradient(135deg, color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 12%, var(--card)) 0%, var(--card) 60%)`,
+        boxShadow: `0 4px 14px -6px color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 45%, transparent)`,
+      }}
+    >
       <CardHeader>
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
@@ -148,7 +164,12 @@ function TarjetaObligacion({ o, onEdit }: { o: ObligacionVista; onEdit: () => vo
               {o.entidad ?? '—'} · cuota {money(o.cuota)}
             </CardDescription>
           </div>
-          <Badge variant={o.tipo === 'otro' ? 'outline' : 'secondary'}>{TIPOS_OBLIGACION[o.tipo]}</Badge>
+          <Badge
+            variant="outline"
+            style={{ color: COLOR_TIPO[o.tipo], borderColor: `color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 45%, transparent)`, background: `color-mix(in srgb, ${COLOR_TIPO[o.tipo]} 12%, transparent)` }}
+          >
+            {TIPOS_OBLIGACION[o.tipo]}
+          </Badge>
           <Button variant="ghost" size="icon-sm" aria-label="Editar" onClick={onEdit}>
             <Pencil />
           </Button>

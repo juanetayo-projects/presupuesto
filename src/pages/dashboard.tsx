@@ -14,6 +14,7 @@ import { IngresoForm } from '@/components/ingresos'
 import { KpiCard } from '@/components/kpi-card'
 import { MesAMes } from '@/components/mes-a-mes'
 import { MetasResumen } from '@/components/metas'
+import { PorResponsable } from '@/components/por-responsable'
 import { Regla503020 } from '@/components/regla-503020'
 import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
@@ -268,6 +269,7 @@ export function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Regla503020 gastos={filtrados} ingreso={r.ingreso} catPorId={catPorId} />
+        <PorResponsable gastos={filtrados} responsables={config.responsables} />
         <MetasResumen />
       </div>
 

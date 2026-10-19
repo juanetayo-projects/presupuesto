@@ -29,14 +29,14 @@ export function AppShell() {
   return (
     <div className="min-h-dvh bg-background">
       {/* Barra lateral (escritorio) */}
-      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r bg-sidebar p-4 md:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-sidebar-border bg-sidebar p-4 text-sidebar-foreground md:flex">
         <div className="mb-6 flex items-center gap-2.5 px-1">
-          <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <span className="grid size-9 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
             <Wallet className="size-4.5" />
           </span>
           <div className="leading-tight">
             <p className="text-sm font-semibold">Presupuesto</p>
-            <p className="text-xs text-muted-foreground">Familia Etayo-Murillo</p>
+            <p className="text-xs text-sidebar-foreground/65">Familia Etayo-Murillo</p>
           </div>
         </div>
         <nav className="grid gap-1">
@@ -47,8 +47,8 @@ export function AppShell() {
               end={n.end}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground',
-                  isActive && 'bg-sidebar-accent text-foreground',
+                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                  isActive && 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-border',
                 )
               }
             >
@@ -60,9 +60,16 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <Button className="mt-6" onClick={() => abrirGasto()}>
+        <Button className="mt-6 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90" onClick={() => abrirGasto()}>
           <Plus /> Nuevo gasto
         </Button>
+        <button
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          className="mt-auto flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          {resolvedTheme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          {resolvedTheme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+        </button>
       </aside>
 
       <div className="md:pl-60">
@@ -79,6 +86,16 @@ export function AppShell() {
               <div className="hidden sm:block">
                 <MonthSwitcher />
               </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full"
+                aria-label={resolvedTheme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                title={resolvedTheme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              >
+                {resolvedTheme === 'dark' ? <Sun /> : <Moon />}
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full" aria-label="Cuenta">

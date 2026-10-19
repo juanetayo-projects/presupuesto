@@ -8,10 +8,11 @@ export interface Filtros {
   categoria: string // 'todas' | id
   medio: string // 'todos' | medio
   estado: string // 'todos' | 'pendiente' | 'pagado' | 'vencido'
+  responsable: string // 'todos' | nombre
   texto: string
 }
 
-export const FILTROS_VACIOS: Filtros = { categoria: 'todas', medio: 'todos', estado: 'todos', texto: '' }
+export const FILTROS_VACIOS: Filtros = { categoria: 'todas', medio: 'todos', estado: 'todos', responsable: 'todos', texto: '' }
 
 interface DataState {
   loading: boolean
@@ -22,7 +23,7 @@ interface DataState {
   ingresos: Ingreso[]
   miembros: Miembro[]
   metas: Meta[]
-  config: { ingresoBase: number; diasAlerta: number; pctImprevistos: number }
+  config: { ingresoBase: number; diasAlerta: number; pctImprevistos: number; responsables: string[] }
   periodo: string
   setPeriodo: (p: string) => void
   filtros: Record<string, Filtros>
@@ -83,7 +84,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ingresos: data?.ingresos ?? [],
     miembros: data?.miembros ?? [],
     metas: data?.metas ?? [],
-    config: data?.config ?? { ingresoBase: 6600000, diasAlerta: 5, pctImprevistos: 5 },
+    config: data?.config ?? { ingresoBase: 6600000, diasAlerta: 5, pctImprevistos: 5, responsables: ['Familiar', 'Pily', 'Juank'] },
     periodo,
     setPeriodo,
     filtros,

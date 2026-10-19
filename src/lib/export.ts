@@ -36,6 +36,7 @@ export async function exportarMesExcel(periodo: string, gastos: Gasto[], ingreso
       'Fecha límite': g.fecha_limite ?? '',
       'Fecha de pago': g.fecha_pago ?? '',
       Estado: g.estado,
+      Responsable: g.responsable ?? 'Familiar',
       'Pagado por': g.pagado_por ?? '',
       Notas: g.notas ?? '',
     })),

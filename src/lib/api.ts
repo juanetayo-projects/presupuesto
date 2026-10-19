@@ -42,6 +42,7 @@ async function cargarReal() {
       ingresoBase: Number(cfg.ingreso_base ?? 6600000),
       diasAlerta: Number(cfg.dias_alerta ?? 5),
       pctImprevistos: Number(cfg.pct_imprevistos ?? 5),
+      responsables: (Array.isArray(cfg.responsables) ? cfg.responsables : ['Familiar', 'Pily', 'Juank']) as string[],
     },
     miembros: check(miembros) ?? [],
     metas: (check(metas) ?? []) as Meta[],
@@ -69,6 +70,7 @@ export async function generarMes(periodo: string, conceptos: Concepto[], gastosM
       medio_pago: c.medio_pago,
       valor_presupuestado: c.valor_base,
       fecha_limite: fechaEnPeriodo(periodo, c.dia_limite),
+      responsable: c.responsable,
     }))
   if (nuevos.length) check(await supabase.from('gastos').insert(nuevos))
   if (ingresosMes.length === 0) {
@@ -211,6 +213,7 @@ export async function copiarMesAnterior(periodo: string, anteriores: Gasto[], in
       valor_presupuestado: g.valor_presupuestado,
       fecha_limite: g.fecha_limite ? fechaEnPeriodo(periodo, Number(g.fecha_limite.slice(8, 10))) : null,
       notas: g.notas,
+      responsable: g.responsable,
     }))
   if (filas.length) check(await supabase.from('gastos').insert(filas))
   if (ingresosMes.length === 0 && ingresosAnt.length) {

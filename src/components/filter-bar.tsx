@@ -11,11 +11,11 @@ const activo = 'border-primary/60 bg-primary/10 text-primary font-medium'
 const itemEstado = 'flex-1 sm:flex-none data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary'
 
 export function FilterBar({ pagina, buscar = true }: { pagina: string; buscar?: boolean }) {
-  const { categorias, gastos } = useData()
+  const { categorias, gastos, config } = useData()
   const [filtros, setFiltros] = useFiltros(pagina)
   const medios = useMemo(() => [...new Set(gastos.map((g) => g.medio_pago ?? 'Sin medio'))].sort(), [gastos])
   const nActivos =
-    Number(filtros.categoria !== 'todas') + Number(filtros.medio !== 'todos') + Number(filtros.estado !== 'todos') + Number(filtros.texto.trim() !== '')
+    Number(filtros.categoria !== 'todas') + Number(filtros.medio !== 'todos') + Number((filtros.responsable ?? 'todos') !== 'todos') + Number(filtros.estado !== 'todos') + Number(filtros.texto.trim() !== '')
 
   return (
     <div className="space-y-2" data-slot="filtros">
@@ -50,6 +50,19 @@ export function FilterBar({ pagina, buscar = true }: { pagina: string; buscar?: 
               <SelectItem key={c.id} value={c.id}>
                 <span className="size-2 rounded-full" style={{ background: c.color }} />
                 {c.nombre}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filtros.responsable ?? 'todos'} onValueChange={(v) => setFiltros({ ...filtros, responsable: v })}>
+          <SelectTrigger className={cn('min-w-0 flex-1 sm:w-40 sm:flex-none', (filtros.responsable ?? 'todos') !== 'todos' && activo)}>
+            <SelectValue placeholder="Responsable" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas las personas</SelectItem>
+            {config.responsables.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r === 'Familiar' ? 'Gasto familiar' : `Gastos ${r}`}
               </SelectItem>
             ))}
           </SelectContent>

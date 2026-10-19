@@ -23,6 +23,7 @@ export function aplicarFiltros(gastos: Gasto[], f: Filtros, diasAlerta: number) 
     if (g.estado === 'omitido' && f.estado !== 'todos') return false
     if (f.categoria !== 'todas' && g.categoria_id !== f.categoria) return false
     if (f.medio !== 'todos' && (g.medio_pago ?? 'Sin medio') !== f.medio) return false
+    if (f.responsable && f.responsable !== 'todos' && (g.responsable ?? 'Familiar') !== f.responsable) return false
     if (f.estado === 'pendiente' && g.estado !== 'pendiente') return false
     if (f.estado === 'pagado' && g.estado !== 'pagado') return false
     if (f.estado === 'vencido' && urgencia(g, diasAlerta) !== 'vencido') return false

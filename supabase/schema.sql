@@ -53,7 +53,8 @@ create table public.conceptos (
   recurrente boolean not null default true,
   activo boolean not null default true,
   orden int not null default 0,
-  notas text
+  notas text,
+  responsable text not null default 'Familiar'   -- Familiar, Pily, Juank…
 );
 
 create table public.ingresos (
@@ -87,6 +88,7 @@ create table public.gastos (
   cuotas_total int,
   notas text,
   pagado_por text,
+  responsable text not null default 'Familiar',
   creado_por text default (auth.jwt() ->> 'email'),
   creado_en timestamptz not null default now()
 );

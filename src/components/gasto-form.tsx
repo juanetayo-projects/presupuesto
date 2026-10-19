@@ -23,7 +23,7 @@ interface Props {
 const NINGUNO = '__ninguno__'
 
 export function GastoForm({ open, onOpenChange, gasto }: Props) {
-  const { periodo, categorias, conceptos, obligaciones, recargar } = useData()
+  const { periodo, categorias, conceptos, obligaciones, config, recargar } = useData()
   const editando = Boolean(gasto)
 
   const [conceptoId, setConceptoId] = useState(NINGUNO)
@@ -35,6 +35,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
   const [mes, setMes] = useState(periodo)
   const [obligacionId, setObligacionId] = useState(NINGUNO)
   const [notas, setNotas] = useState('')
+  const [responsable, setResponsable] = useState('Familiar')
   const [dividir, setDividir] = useState(false)
   const [cuotas, setCuotas] = useState(3)
   const [modo, setModo] = useState<'total' | 'cuota'>('total')
@@ -52,6 +53,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     setMes(gasto?.periodo ?? periodo)
     setObligacionId(gasto?.obligacion_id ?? NINGUNO)
     setNotas(gasto?.notas ?? '')
+    setResponsable(gasto?.responsable ?? 'Familiar')
     setDividir(false)
     setCuotas(3)
     setModo('total')
@@ -67,6 +69,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     setValor(Number(c.valor_base))
     setFecha(fechaEnPeriodo(mes, c.dia_limite) ?? '')
     setObligacionId(c.obligacion_id ?? NINGUNO)
+    setResponsable(c.responsable ?? 'Familiar')
   }
 
   const resumenCuotas = useMemo(() => {
@@ -92,6 +95,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
         valor_presupuestado: valor,
         fecha_limite: fecha || null,
         notas: notas.trim() || null,
+        responsable,
       }
       if (gasto) {
         await actualizarGasto(gasto.id, base)
@@ -169,6 +173,17 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
         <div className="grid gap-1.5">
           <Label htmlFor="g-desc">Concepto</Label>
           <Input id="g-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej. Matrícula colegio, SOAT, regalo…" />
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label>¿De quién es el gasto?</Label>
+          <ToggleGroup type="single" variant="outline" size="sm" value={responsable} onValueChange={(v) => v && setResponsable(v)} className="w-full">
+            {config.responsables.map((r) => (
+              <ToggleGroupItem key={r} value={r} className="flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                {r}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
