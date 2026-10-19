@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, ListTree, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 import { ResponsableBadge } from '@/components/responsable-badge'
 import { PanelConceptos } from '@/components/panel-conceptos'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -21,6 +21,19 @@ import { diasHasta, fechaCorta, money, nombreMes, pctLabel } from '@/lib/format'
 import { aplicarFiltros, resumen, urgencia, valorGasto } from '@/lib/metrics'
 import type { Gasto } from '@/lib/types'
 import { cn } from '@/lib/utils'
+
+/** true cuando la ventana mide al menos `px` de ancho (para elegir panel fijo u hoja deslizable). */
+function useMinWidth(px: number) {
+  const q = `(min-width: ${px}px)`
+  const [ok, setOk] = useState(() => window.matchMedia(q).matches)
+  useEffect(() => {
+    const m = window.matchMedia(q)
+    const fn = () => setOk(m.matches)
+    m.addEventListener('change', fn)
+    return () => m.removeEventListener('change', fn)
+  }, [q])
+  return ok
+}
 
 export function GastosPage() {
   const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, recargar } = useData()
@@ -48,17 +61,10 @@ export function GastosPage() {
     guardarContraidas(n)
   }
   const buscando = filtros.texto.trim() !== ''
-  const [panelAbierto, setPanelAbierto] = useState(false)
-  /** Abre la categoría (si estaba contraída), cambia a la vista de lista y la lleva a la vista. */
-  const irACategoria = (id: string) => {
-    if (contraidas.has(id)) {
-      const n = new Set(contraidas)
-      n.delete(id)
-      guardarContraidas(n)
-    }
-    if (vista !== 'lista') cambiarVista('lista')
-    setTimeout(() => document.getElementById(`cat-${id}`)?.scrollIntoView({ block: 'start' }), 60)
-  }
+  // Categoría seleccionada: su detalle se muestra en el panel derecho (hoja deslizable en pantallas angostas)
+  const [catSel, setCatSel] = useState<string | null>(null)
+  const anchoLg = useMinWidth(1024)
+  const seleccionar = (id: string) => setCatSel((x) => (x === id ? null : id))
   const { abrirGasto } = useUi()
   const [generando, setGenerando] = useState(false)
   const [vista, setVista] = useState<'lista' | 'calendario'>(() => {
@@ -96,6 +102,8 @@ export function GastosPage() {
         .filter((x) => x.items.length > 0),
     [categorias, lista],
   )
+
+  const grupoSel = catSel ? grupos.find((x) => x.c.id === catSel) ?? null : null
 
   const faltantes = conceptos.filter(
     (c) => c.activo && c.recurrente && (!c.hasta_periodo || c.hasta_periodo >= periodo) && !gastosMes.some((g) => g.concepto_id === c.id),
@@ -145,16 +153,13 @@ export function GastosPage() {
               <CopyPlus /> {gastosMes.length ? `Agregar ${faltantes} de la plantilla` : 'Generar mes'}
             </Button>
           )}
-          <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setPanelAbierto(true)}>
-            <ListTree /> Conceptos
-          </Button>
           <Button size="sm" className="hidden md:inline-flex" onClick={() => abrirGasto()}>
             <Plus /> Nuevo gasto
           </Button>
         </div>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_290px]">
+      <div className={cn('grid items-start gap-4', grupoSel && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
       <div className="min-w-0 space-y-4">
       <FilterBar pagina="gastos" />
 
@@ -187,26 +192,38 @@ export function GastosPage() {
           const abierta = buscando || !contraidas.has(c.id)
           const pendientes = items.filter((g) => g.estado === 'pendiente').length
           return (
-            <section key={c.id} id={`cat-${c.id}`} className="scroll-mt-24 overflow-hidden rounded-xl border bg-card shadow-xs">
-              <button
-                onClick={() => alternar(c.id)}
-                aria-expanded={abierta}
-                className="flex w-full items-center gap-2 border-l-4 px-3 py-2.5 text-left transition-colors hover:brightness-95 sm:px-4"
+            <section
+              key={c.id}
+              id={`cat-${c.id}`}
+              className={cn('scroll-mt-24 overflow-hidden rounded-xl border bg-card shadow-xs', catSel === c.id && 'ring-2 ring-offset-2 ring-offset-background')}
+              style={catSel === c.id ? ({ '--tw-ring-color': c.color } as React.CSSProperties) : undefined}
+            >
+              <div
+                className="flex w-full items-center gap-2 border-l-4 pr-1 pl-3 sm:pl-4"
                 style={{ borderLeftColor: c.color, background: `color-mix(in srgb, ${c.color} 9%, var(--card))` }}
               >
-                <CategoryIcon icono={c.icono} color={c.color} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-semibold">{c.nombre}</h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    {items.length} gasto(s){pendientes ? ` · ${pendientes} pendiente(s)` : ' · todo pagado'}
-                  </p>
-                </div>
-                <span className="text-sm font-semibold tabular-nums">{money(total)}</span>
-                <Badge variant="secondary" className="tabular-nums">
-                  {pctLabel(total, totalMes)}
-                </Badge>
-                <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', !abierta && '-rotate-90')} />
-              </button>
+                <button
+                  onClick={() => seleccionar(c.id)}
+                  aria-pressed={catSel === c.id}
+                  title="Ver los conceptos de esta categoría"
+                  className="flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left transition-colors hover:brightness-95"
+                >
+                  <CategoryIcon icono={c.icono} color={c.color} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-semibold">{c.nombre}</h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      {items.length} gasto(s){pendientes ? ` · ${pendientes} pendiente(s)` : ' · todo pagado'}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums">{money(total)}</span>
+                  <Badge variant="secondary" className="tabular-nums">
+                    {pctLabel(total, totalMes)}
+                  </Badge>
+                </button>
+                <Button variant="ghost" size="icon-sm" onClick={() => alternar(c.id)} aria-expanded={abierta} aria-label={abierta ? 'Contraer categoría' : 'Expandir categoría'}>
+                  <ChevronDown className={cn('text-muted-foreground transition-transform', !abierta && '-rotate-90')} />
+                </Button>
+              </div>
               {abierta && (
                 <div className="divide-y border-t">
                   {items.map((g) => (
@@ -219,29 +236,30 @@ export function GastosPage() {
         })}
       </div>
 
-      <aside className="sticky top-20 hidden max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1 lg:block">
-        <PanelConceptos grupos={grupos} totalMes={totalMes} diasAlerta={config.diasAlerta} onIrCategoria={irACategoria} onAbrir={abrirGasto} />
-      </aside>
+      {grupoSel && anchoLg && (
+        <aside className="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1">
+          <PanelConceptos {...grupoSel} totalMes={totalMes} diasAlerta={config.diasAlerta} onCerrar={() => setCatSel(null)} onAbrir={abrirGasto} />
+        </aside>
+      )}
       </div>
 
-      <Sheet open={panelAbierto} onOpenChange={setPanelAbierto}>
-        <SheetContent side="right" className="w-[88vw] overflow-y-auto p-4 sm:max-w-sm">
-          <SheetHeader className="p-0">
-            <SheetTitle>Conceptos de {nombreMes(periodo)}</SheetTitle>
+      <Sheet open={Boolean(grupoSel) && !anchoLg} onOpenChange={(v) => !v && setCatSel(null)}>
+        <SheetContent side="right" className="w-[88vw] gap-0 overflow-y-auto p-3 sm:max-w-sm [&>button]:hidden">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Conceptos de {grupoSel?.c.nombre}</SheetTitle>
           </SheetHeader>
-          <PanelConceptos
-            grupos={grupos}
-            totalMes={totalMes}
-            diasAlerta={config.diasAlerta}
-            onIrCategoria={(id) => {
-              setPanelAbierto(false)
-              irACategoria(id)
-            }}
-            onAbrir={(g) => {
-              setPanelAbierto(false)
-              abrirGasto(g)
-            }}
-          />
+          {grupoSel && (
+            <PanelConceptos
+              {...grupoSel}
+              totalMes={totalMes}
+              diasAlerta={config.diasAlerta}
+              onCerrar={() => setCatSel(null)}
+              onAbrir={(g) => {
+                setCatSel(null)
+                abrirGasto(g)
+              }}
+            />
+          )}
         </SheetContent>
       </Sheet>
     </div>
