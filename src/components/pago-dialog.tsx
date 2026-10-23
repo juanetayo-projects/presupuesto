@@ -9,11 +9,11 @@ import { useAuth } from '@/context/auth'
 import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
 import { registrarPago } from '@/lib/api'
-import { hoyISO, money } from '@/lib/format'
+import { hoyISO, money, nombreMes } from '@/lib/format'
 import type { Gasto } from '@/lib/types'
 
 export function PagoDialog({ gasto, onClose }: { gasto: Gasto | null; onClose: () => void }) {
-  const { obligaciones, miembros, recargar } = useData()
+  const { obligaciones, miembros, recargar, estadoMes } = useData()
   const { session } = useAuth()
   const yo = miembros.find((m) => m.email === session?.user.email)?.nombre ?? ''
   const [pagadoPor, setPagadoPor] = useState(yo)
@@ -24,6 +24,7 @@ export function PagoDialog({ gasto, onClose }: { gasto: Gasto | null; onClose: (
 
   const obligacion = gasto?.obligacion_id ? obligaciones.find((o) => o.id === gasto.obligacion_id) : null
   const pideAbono = obligacion && obligacion.tipo !== 'cadena'
+  const futuro = gasto ? estadoMes(gasto.periodo) === 'futuro' : false
 
   useEffect(() => {
     if (!gasto) return
@@ -52,7 +53,7 @@ export function PagoDialog({ gasto, onClose }: { gasto: Gasto | null; onClose: (
     <ResponsiveModal
       open={Boolean(gasto)}
       onOpenChange={(v) => !v && onClose()}
-      title="Registrar pago"
+      title={futuro ? 'Registrar pago anticipado' : 'Registrar pago'}
       description={gasto ? `${gasto.descripcion} · presupuestado ${money(gasto.valor_presupuestado)}` : ''}
       footer={
         <>
@@ -66,6 +67,11 @@ export function PagoDialog({ gasto, onClose }: { gasto: Gasto | null; onClose: (
       }
     >
       <div className="grid gap-4 py-1">
+        {futuro && gasto && (
+          <p className="rounded-lg border border-violet-500/30 bg-violet-500/8 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
+            Este valor es un <b>estimado</b> de {nombreMes(gasto.periodo)}. Al registrarlo como pagado pasa a ser un gasto realizado de ese mes.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="p-valor">Valor pagado</Label>

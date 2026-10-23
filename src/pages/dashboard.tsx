@@ -14,6 +14,8 @@ import { IconoGasto, MarcaIcono } from '@/components/marca-icono'
 import { FilterBar } from '@/components/filter-bar'
 import { IngresoForm } from '@/components/ingresos'
 import { KpiCard } from '@/components/kpi-card'
+import { EstadoMesBanner } from '@/components/estado-mes'
+import { BarraCarga, Gauge, useReducedMotion } from '@/components/motion'
 import { MesAMes } from '@/components/mes-a-mes'
 import { MetasResumen } from '@/components/metas'
 import { PorResponsable } from '@/components/por-responsable'
@@ -24,12 +26,15 @@ import { useAlertasNavegador } from '@/hooks/use-alertas'
 import { copiarMesAnterior, generarMes } from '@/lib/api'
 import { exportarMesExcel } from '@/lib/export'
 import { diasHasta, fechaCorta, mesCorto, money, moneyShort, nombreMes, pct, pctLabel, periodoMas } from '@/lib/format'
-import { aplicarFiltros, porCategoria, porConcepto, resumen, valorGasto, type Porcion } from '@/lib/metrics'
+import { aplicarFiltros, deudaAlMes, porCategoria, porConcepto, resumen, valorGasto, type Porcion } from '@/lib/metrics'
+import type { EstadoMes } from '@/lib/types'
 import type { Ingreso } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export function DashboardPage() {
-  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, catPorId, recargar } = useData()
+  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, catPorId, recargar, estadoMes } = useData()
+  const estado = estadoMes(periodo)
+  const futuro = estado === 'futuro'
   const [filtros] = useFiltros('inicio')
   const { pagar } = useUi()
   const { alertas, cortes } = useAlertasNavegador()
@@ -62,11 +67,12 @@ export function DashboardPage() {
       )
       const ing = ingresos.filter((x) => x.periodo === p).reduce((s, x) => s + Number(x.valor), 0)
       const total = gs.reduce((s, g) => s + valorGasto(g), 0)
-      return { mes: mesCorto(p), gastos: total, ingreso: ing || null }
+      return { mes: mesCorto(p), gastos: total, ingreso: ing || null, estado: estadoMes(p) }
     })
-  }, [todosFiltrados, ingresos, mesesTend, tendCat, tendConc])
+  }, [todosFiltrados, ingresos, mesesTend, tendCat, tendConc, estadoMes])
 
-  const deudaTotal = obligaciones.filter((o) => o.tipo !== 'cadena' && o.activo).reduce((s, o) => s + Number(o.saldo_actual ?? 0), 0)
+  // Saldo de las deudas al cierre del mes elegido (no el de hoy), para que cada mes conserve su propia cifra
+  const deudaTotal = useMemo(() => deudaAlMes(periodo, obligaciones, gastos, estado), [periodo, obligaciones, gastos, estado])
   const sinSaldo = obligaciones.filter((o) => o.tipo !== 'cadena' && o.saldo_inicial == null).length
 
   async function generar() {
@@ -107,7 +113,7 @@ export function DashboardPage() {
           <div className="mx-auto mb-2 grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
             <CalendarClock className="size-6" />
           </div>
-          <CardTitle>{nombreMes(periodo)} aún no tiene presupuesto</CardTitle>
+          <CardTitle>{nombreMes(periodo)} aún no tiene {futuro ? 'valores estimados' : 'presupuesto'}</CardTitle>
           <CardDescription>
             Se crean los {conceptos.filter((c) => c.activo && c.recurrente).length} gastos recurrentes de la plantilla y el ingreso base de{' '}
             {money(config.ingresoBase)}. Después puedes ajustar valores y agregar otros gastos.
@@ -136,9 +142,11 @@ export function DashboardPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-semibold tracking-tight">Resumen de {nombreMes(periodo)}</h2>
+          <h2 className="text-xl font-semibold tracking-tight">
+            {futuro ? 'Estimado de' : 'Resumen de'} {nombreMes(periodo)}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Los porcentajes de las gráficas son respecto del total de gastos del mes ({money(r.total)}).
+            Los porcentajes de las gráficas son respecto del total {futuro ? 'estimado' : 'de gastos'} del mes ({money(r.total)}).
           </p>
         </div>
         <Button
@@ -150,37 +158,56 @@ export function DashboardPage() {
         </Button>
       </div>
 
+      <EstadoMesBanner periodo={periodo} />
+
       <FilterBar pagina="inicio" buscar={false} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           solid
-          label="Ingreso del mes"
-          value={money(r.ingreso)}
+          i={0}
+          label={futuro ? 'Ingreso estimado' : 'Ingreso del mes'}
+          value={r.ingreso}
           icon={Wallet}
           tone="brand"
           hint={`${ingresosMes.length} ingreso(s) · toca para agregar`}
           onClick={() => setNuevoIngreso({ periodo, tipo: 'Otro', valor: 0 })}
         />
         <KpiCard
-          label="Total gastos"
-          value={money(r.total)}
+          i={1}
+          label={futuro ? 'Total estimado' : 'Total gastos'}
+          value={r.total}
           icon={Receipt}
           tone={usoIngreso > 90 ? 'bad' : usoIngreso > 75 ? 'warn' : 'default'}
           progress={usoIngreso}
           hint={`${pctLabel(r.total, r.ingreso)} del ingreso`}
         />
-        <KpiCard label="Pagado" value={money(r.pagado)} icon={CheckCircle2} tone="good" progress={ejecucion} hint={`${r.nPagados} de ${r.n} · ${pctLabel(r.pagado, r.presupuestado)} ejecutado`} />
-        <KpiCard label="Por pagar" value={money(r.pendiente)} icon={ArrowDownRight} tone="warn" hint={`${r.nPendientes} pago(s) pendiente(s)`} />
+        <KpiCard i={2} label={futuro ? 'Pagado por anticipado' : 'Pagado'} value={r.pagado} icon={CheckCircle2} tone="good" progress={ejecucion} hint={`${r.nPagados} de ${r.n} · ${pctLabel(r.pagado, r.presupuestado)} ejecutado`} />
+        <KpiCard
+          i={3}
+          label={futuro ? 'Estimado a pagar' : estado === 'cerrado' || estado === 'pasado' ? 'Quedó sin pagar' : 'Por pagar'}
+          value={r.pendiente}
+          icon={ArrowDownRight}
+          tone="warn"
+          hint={futuro ? `${r.nPendientes} pago(s) estimado(s)` : `${r.nPendientes} pago(s) pendiente(s)`}
+        />
         <KpiCard
           solid
-          label="Disponible"
-          value={money(r.disponible)}
+          i={4}
+          label={futuro ? 'Disponible estimado' : 'Disponible'}
+          value={r.disponible}
           icon={PiggyBank}
           tone={r.disponible < 0 ? 'bad' : 'good'}
           hint={r.disponible < 0 ? 'Gastos superan el ingreso' : `${pctLabel(r.disponible, r.ingreso)} del ingreso libre`}
         />
-        <KpiCard label="Deuda total" value={money(deudaTotal)} icon={Landmark} tone="default" hint={sinSaldo ? `${sinSaldo} obligación(es) sin saldo registrado` : 'Saldo de préstamos y tarjetas'} />
+        <KpiCard
+          i={5}
+          label={futuro ? 'Deuda proyectada' : 'Deuda al cierre del mes'}
+          value={deudaTotal}
+          icon={Landmark}
+          tone="default"
+          hint={sinSaldo ? `${sinSaldo} obligación(es) sin saldo registrado` : futuro ? 'Si se pagan las cuotas estimadas' : 'Saldo de préstamos y tarjetas'}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
@@ -348,7 +375,20 @@ export function DashboardPage() {
 
       <MesAMes periodo={periodo} gastos={todosFiltrados} categorias={categorias} />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="reveal">
+          <CardHeader>
+            <CardTitle>Uso del ingreso</CardTitle>
+            <CardDescription>{futuro ? 'Gasto estimado' : 'Gasto del mes'} frente al ingreso</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Gauge
+              pct={usoIngreso}
+              label={`${money(r.total)} de ${money(r.ingreso)}`}
+              sub={r.disponible >= 0 ? `Quedan ${money(r.disponible)}` : `Excede en ${money(-r.disponible)}`}
+            />
+          </CardContent>
+        </Card>
         <Regla503020 gastos={filtrados} ingreso={r.ingreso} catPorId={catPorId} />
         <PorResponsable gastos={filtrados} responsables={config.responsables} />
         <MetasResumen />
@@ -379,9 +419,7 @@ export function DashboardPage() {
                 <p className="mt-2 text-xs text-muted-foreground tabular-nums">
                   {money(pag)} de {money(pres)}
                 </p>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct(pag, pres))}%`, background: c.color }} />
-                </div>
+                <BarraCarga pct={pct(pag, pres)} color={c.color} className="mt-1.5" />
                 <p className="mt-1 text-right text-[11px] font-medium tabular-nums">{pctLabel(pag, pres, 0)}</p>
               </div>
             ))}
@@ -447,7 +485,8 @@ function BarrasConcepto({ data }: { data: ReturnType<typeof porConcepto> }) {
   )
 }
 
-function Tendencia({ data }: { data: { mes: string; gastos: number; ingreso: number | null }[] }) {
+function Tendencia({ data }: { data: { mes: string; gastos: number; ingreso: number | null; estado: EstadoMes }[] }) {
+  const reduce = useReducedMotion()
   const config = { gastos: { label: 'Gastos', color: '#2a78d6' }, ingreso: { label: 'Ingreso', color: 'var(--foreground)' } } satisfies ChartConfig
   return (
     <ChartContainer config={config} className="aspect-auto h-64 w-full">
@@ -461,16 +500,28 @@ function Tendencia({ data }: { data: { mes: string; gastos: number; ingreso: num
             const p = payload[0].payload as (typeof data)[number]
             return (
               <div className="grid min-w-40 gap-1 rounded-lg border bg-background px-3 py-2 text-xs shadow-xl">
-                <p className="font-medium capitalize">{label}</p>
-                <Fila color="#2a78d6" label="Gastos" value={money(p.gastos)} />
+                <p className="font-medium capitalize">
+                  {label}
+                  {p.estado === 'futuro' && <span className="ml-1 font-normal text-violet-600 dark:text-violet-300">· estimado</span>}
+                </p>
+                <Fila color="#2a78d6" label={p.estado === 'futuro' ? 'Estimado' : 'Gastos'} value={money(p.gastos)} />
                 {p.ingreso != null && <Fila color="var(--foreground)" label="Ingreso" value={money(p.ingreso)} />}
                 {p.ingreso ? <p className="text-muted-foreground">Usa el {pctLabel(p.gastos, p.ingreso)} del ingreso</p> : null}
               </div>
             )
           }}
         />
-        <Bar dataKey="gastos" fill="var(--color-gastos)" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />
-        <Line dataKey="ingreso" type="monotone" stroke="var(--color-ingreso)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 4 }} connectNulls isAnimationActive={false} />
+        <Bar dataKey="gastos" fill="var(--color-gastos)" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={!reduce} animationDuration={700}>
+          {data.map((d) => (
+            <Cell
+              key={d.mes}
+              fillOpacity={d.estado === 'futuro' ? 0.35 : 1}
+              stroke={d.estado === 'futuro' ? 'var(--color-gastos)' : undefined}
+              strokeDasharray={d.estado === 'futuro' ? '4 3' : undefined}
+            />
+          ))}
+        </Bar>
+        <Line dataKey="ingreso" type="monotone" stroke="var(--color-ingreso)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 4 }} connectNulls isAnimationActive={!reduce} animationDuration={1100} />
       </ComposedChart>
     </ChartContainer>
   )

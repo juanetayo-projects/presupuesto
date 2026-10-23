@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTheme } from 'next-themes'
-import { Home, Landmark, ListChecks, LogOut, Moon, Plus, Settings, Sun, Wallet } from 'lucide-react'
+import { CalendarRange, Home, Landmark, ListChecks, LogOut, Moon, Plus, Settings, Sun, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MonthSwitcher } from '@/components/month-switcher'
@@ -15,6 +15,7 @@ export const APP_TITLE = 'Presupuesto familia Etayo-Murillo'
 const NAV = [
   { to: '/', label: 'Inicio', icon: Home, end: true },
   { to: '/gastos', label: 'Gastos', icon: ListChecks },
+  { to: '/historico', label: 'Histórico', icon: CalendarRange },
   { to: '/deudas', label: 'Deudas', icon: Landmark },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
 ]
@@ -130,7 +131,7 @@ export function AppShell() {
 
       {/* Navegación inferior (celular) */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden">
-        <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
+        <div className="relative mx-auto grid h-16 max-w-md grid-cols-6 items-center">
           {NAV.slice(0, 2).map((n) => (
             <BottomItem key={n.to} {...n} badge={n.to === '/gastos' ? vencidos : 0} />
           ))}

@@ -1,12 +1,15 @@
 import type { LucideIcon } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { CountUp, useCarga } from '@/components/motion'
+import { money } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 type Tone = 'default' | 'good' | 'bad' | 'warn' | 'brand'
 
 interface Props {
   label: string
-  value: string
+  /** Un número se muestra en pesos y cuenta hasta su valor; un texto se muestra tal cual. */
+  value: string | number
   hint?: string
   icon: LucideIcon
   tone?: Tone
@@ -14,6 +17,8 @@ interface Props {
   /** Fondo sólido de color (la métrica principal de la vista). Si no, fondo tintado. */
   solid?: boolean
   onClick?: () => void
+  /** Posición para la entrada escalonada. */
+  i?: number
 }
 
 const tinted: Record<Tone, { card: string; icon: string; bar: string; value: string }> = {
@@ -57,13 +62,15 @@ const solidos: Record<Tone, string> = {
   default: 'from-violet-600 to-indigo-700 shadow-violet-600/25',
 }
 
-export function KpiCard({ label, value, hint, icon: Icon, tone = 'default', progress, solid, onClick }: Props) {
+export function KpiCard({ label, value, hint, icon: Icon, tone = 'default', progress, solid, onClick, i = 0 }: Props) {
   const t = tinted[tone]
+  const carga = useCarga(progress ?? 0)
   return (
     <Card
       onClick={onClick}
+      style={{ '--i': i } as React.CSSProperties}
       className={cn(
-        'relative gap-0 overflow-hidden p-4 shadow-sm',
+        'reveal relative gap-0 overflow-hidden p-4 shadow-sm',
         solid ? cn('border-transparent bg-linear-to-br text-white shadow-lg', solidos[tone]) : t.card,
         onClick && 'cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md',
       )}
@@ -75,10 +82,12 @@ export function KpiCard({ label, value, hint, icon: Icon, tone = 'default', prog
           <Icon className="size-4" />
         </span>
       </div>
-      <p className={cn('relative mt-1 truncate text-lg font-bold tracking-tight tabular-nums sm:text-xl', solid ? 'text-white' : t.value)}>{value}</p>
+      <p className={cn('relative mt-1 truncate text-lg font-bold tracking-tight tabular-nums sm:text-xl', solid ? 'text-white' : t.value)}>
+        {typeof value === 'number' ? <CountUp value={value} format={money} /> : value}
+      </p>
       {progress !== undefined && (
         <div className={cn('relative mt-2 h-1.5 overflow-hidden rounded-full', solid ? 'bg-white/25' : 'bg-foreground/10')}>
-          <div className={cn('h-full rounded-full transition-all', solid ? 'bg-white' : t.bar)} style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
+          <div className={cn('barra-carga h-full rounded-full', solid ? 'bg-white' : t.bar)} style={{ width: `${carga}%` }} />
         </div>
       )}
       {hint && <p className={cn('relative mt-1.5 truncate text-[11px]', solid ? 'text-white/80' : 'text-muted-foreground')}>{hint}</p>}

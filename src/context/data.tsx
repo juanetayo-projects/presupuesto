@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { toast } from 'sonner'
 import { cargarTodo } from '@/lib/api'
 import { periodoActual } from '@/lib/format'
-import type { Categoria, Concepto, Gasto, Ingreso, Meta, Miembro, ObligacionVista } from '@/lib/types'
+import type { Categoria, CierreMes, Concepto, EstadoMes, Gasto, Ingreso, Meta, Miembro, ObligacionVista } from '@/lib/types'
 
 export interface Filtros {
   categoria: string // 'todas' | id
@@ -23,6 +23,9 @@ interface DataState {
   ingresos: Ingreso[]
   miembros: Miembro[]
   metas: Meta[]
+  cierres: CierreMes[]
+  /** cerrado · pasado · actual · futuro (valores estimados) */
+  estadoMes: (p: string) => EstadoMes
   config: { ingresoBase: number; diasAlerta: number; pctImprevistos: number; responsables: string[] }
   periodo: string
   setPeriodo: (p: string) => void
@@ -73,6 +76,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const cerrados = useMemo(() => new Set((data?.cierres ?? []).map((c) => c.periodo)), [data?.cierres])
+  const estadoMes = useCallback(
+    (p: string): EstadoMes => {
+      if (cerrados.has(p)) return 'cerrado'
+      const hoy = periodoActual()
+      return p < hoy ? 'pasado' : p === hoy ? 'actual' : 'futuro'
+    },
+    [cerrados],
+  )
+
   const catPorId = useMemo(() => new Map((data?.categorias ?? []).map((c) => [c.id, c])), [data?.categorias])
 
   const value: DataState = {
@@ -84,6 +97,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ingresos: data?.ingresos ?? [],
     miembros: data?.miembros ?? [],
     metas: data?.metas ?? [],
+    cierres: data?.cierres ?? [],
+    estadoMes,
     config: data?.config ?? { ingresoBase: 6600000, diasAlerta: 5, pctImprevistos: 5, responsables: ['Familiar', 'Pily', 'Juank'] },
     periodo,
     setPeriodo,

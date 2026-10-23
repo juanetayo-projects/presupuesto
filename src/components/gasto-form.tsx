@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Trash2 } from 'lucide-react'
+import { Lock, Telescope, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,7 +37,7 @@ function Campo({ label, htmlFor, className, children }: { label: string; htmlFor
 }
 
 export function GastoForm({ open, onOpenChange, gasto }: Props) {
-  const { periodo, categorias, conceptos, config, recargar } = useData()
+  const { periodo, categorias, conceptos, config, recargar, estadoMes } = useData()
   const editando = Boolean(gasto)
 
   const [conceptoId, setConceptoId] = useState(NINGUNO)
@@ -95,7 +95,12 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     return { total, porCuota, hasta: nombreMes(periodoMas(mes, cuotas - 1)) }
   }, [dividir, cuotas, modo, valor, mes])
 
+  // Un mes cerrado no se modifica (la base también lo impide); en meses futuros el valor es un estimado a pagar.
+  const cerrado = estadoMes(mes) === 'cerrado' || (gasto ? estadoMes(gasto.periodo) === 'cerrado' : false)
+  const futuro = estadoMes(mes) === 'futuro'
+
   async function guardar() {
+    if (cerrado) return toast.error('El mes está cerrado', { description: 'Reábrelo desde Inicio o Histórico para modificarlo.' })
     if (!descripcion.trim()) return toast.error('Escribe el concepto del gasto')
     if (!categoriaId) return toast.error('Elige una categoría')
     if (valor <= 0) return toast.error('El valor debe ser mayor a cero')
@@ -163,7 +168,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
       title={editando ? 'Editar gasto' : 'Nuevo gasto'}
       description={editando && gasto?.cuotas_total ? `Cuota ${gasto.cuota_num} de ${gasto.cuotas_total}` : undefined}
       footerStart={
-        editando && (
+        editando && !cerrado && (
           <>
             <Button variant="destructive" onClick={() => borrar(false)}>
               <Trash2 /> Eliminar
@@ -181,12 +186,22 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={guardar} disabled={guardando}>
+          <Button onClick={guardar} disabled={guardando || cerrado}>
             {guardando ? 'Guardando…' : 'Guardar'}
           </Button>
         </>
       }
     >
+      {cerrado && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-slate-500/30 bg-slate-500/10 px-3 py-2 text-xs">
+          <Lock className="size-3.5 shrink-0" /> {nombreMes(gasto?.periodo ?? mes)} está cerrado: sólo consulta. Reábrelo para modificar este gasto.
+        </div>
+      )}
+      {futuro && !cerrado && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/8 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
+          <Telescope className="size-3.5 shrink-0" /> {nombreMes(mes)} es un mes futuro: el valor se registra como <b>estimado a pagar</b>.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3">
         {!editando && (
           <Campo label="Desde la plantilla (opcional)" className="col-span-2 sm:col-span-1">
@@ -220,7 +235,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
           </ToggleGroup>
         </Campo>
 
-        <Campo label={dividir && modo === 'cuota' ? 'Valor por cuota' : 'Valor'} htmlFor="g-valor">
+        <Campo label={dividir && modo === 'cuota' ? 'Valor por cuota' : futuro ? 'Valor estimado' : 'Valor'} htmlFor="g-valor">
           <MoneyInput id="g-valor" value={valor} onChange={setValor} />
         </Campo>
         <Campo label="Mes" htmlFor="g-mes">

@@ -19,6 +19,9 @@ App web mobile-first (instalable como PWA) para llevar el presupuesto mensual de
 
 - **Inicio**: KPIs (ingreso, total de gastos, pagado, por pagar, disponible, deuda), alertas de pago, donut por categoría y barras por concepto (en % del total de gastos), tendencia de 6 meses, regla 50/30/20, metas y ejecución por categoría.
 - **Gastos**: lista agrupada por categoría o **calendario de pagos**; filtros por categoría, medio de pago y estado; pago con un toque (valor, fecha, quién pagó, abono a capital); gastos divididos en **N cuotas**; exportación a Excel.
+- **Histórico**: tabla mes a mes por categoría (expandible a conceptos) con lo realmente pagado, ingreso y disponible; gráfico de evolución por categoría; exportación a Excel. Los meses futuros se muestran como **valores estimados a pagar**.
+- **Cierre de mes**: un mes cerrado queda congelado en la base (trigger `validar_mes_abierto`) y sus cifras no cambian al trabajar en otros meses. La deuda del Inicio se calcula al cierre del mes elegido.
+- **Motion**: números que cuentan, barras que cargan, gauge con aguja, pestañas con píldora deslizante y líneas que se dibujan (modelo: "12 Motion Graphics with Opus 5.5"); respeta "reducir movimiento".
 - **Deudas**: préstamos, tarjetas, compras a cuotas (ADDI) y cadenas de ahorro, con saldo automático, historial, plan **bola de nieve / avalancha** y **metas de ahorro**.
 - **Ajustes**: ingresos del mes, plantilla de **categorías e ítems**, clase 50/30/20 y colores, días de alerta y notificaciones, miembros de la familia.
 

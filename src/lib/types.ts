@@ -128,3 +128,19 @@ export interface Meta {
   activo: boolean
   notas: string | null
 }
+
+/** Foto de un mes cerrado: sus gastos e ingresos quedan congelados en la base. */
+export interface CierreMes {
+  periodo: string
+  resumen: { ingreso?: number; total?: number; pagado?: number; pendiente?: number; categorias?: Record<string, number> }
+  cerrado_por: string | null
+  cerrado_en: string
+}
+
+/**
+ * - cerrado: congelado, no admite cambios.
+ * - pasado: ya terminó pero sigue abierto (conviene cerrarlo).
+ * - actual: el mes en curso.
+ * - futuro: lo registrado son valores estimados a pagar, no gastos.
+ */
+export type EstadoMes = 'cerrado' | 'pasado' | 'actual' | 'futuro'

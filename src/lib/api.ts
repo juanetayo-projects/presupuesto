@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { fechaEnPeriodo, periodoMas } from './format'
-import type { Concepto, Gasto, Ingreso, Meta, Obligacion } from './types'
+import type { CierreMes, Concepto, Gasto, Ingreso, Meta, Obligacion } from './types'
 
 function check<T>({ data, error }: { data: T; error: { message: string } | null }) {
   if (error) throw new Error(error.message)
@@ -20,7 +20,7 @@ export async function cargarTodo() {
 }
 
 async function cargarReal() {
-  const [categorias, conceptos, obligaciones, gastos, ingresos, config, miembros, metas] = await Promise.all([
+  const [categorias, conceptos, obligaciones, gastos, ingresos, config, miembros, metas, cierres] = await Promise.all([
     supabase.from('categorias').select('*').order('orden'),
     supabase.from('conceptos').select('*').order('orden'),
     supabase.from('v_obligaciones').select('*').order('nombre'),
@@ -29,6 +29,7 @@ async function cargarReal() {
     supabase.from('configuracion').select('*'),
     supabase.from('miembros').select('email,nombre').order('nombre'),
     supabase.from('metas').select('*').order('creado_en'),
+    supabase.from('cierres_mes').select('*').order('periodo'),
   ])
   const cfg: Record<string, unknown> = {}
   for (const r of check(config) ?? []) cfg[r.clave] = r.valor
@@ -46,6 +47,7 @@ async function cargarReal() {
     },
     miembros: check(miembros) ?? [],
     metas: (check(metas) ?? []) as Meta[],
+    cierres: (check(cierres) ?? []) as CierreMes[],
   }
 }
 
@@ -240,4 +242,13 @@ export async function eliminarMeta(id: string) {
  */
 export async function eliminarConcepto(id: string) {
   check(await supabase.from('conceptos').delete().eq('id', id))
+}
+
+/** Cierra un mes: guarda la foto de sus totales y la base bloquea desde ya cualquier cambio en sus gastos e ingresos. */
+export async function cerrarMes(periodo: string, resumen: CierreMes['resumen']) {
+  check(await supabase.from('cierres_mes').upsert({ periodo, resumen }))
+}
+
+export async function reabrirMes(periodo: string) {
+  check(await supabase.from('cierres_mes').delete().eq('periodo', periodo))
 }

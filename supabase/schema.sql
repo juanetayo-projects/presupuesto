@@ -154,3 +154,42 @@ begin
     execute format('create policy %I on public.%I for delete to authenticated using (public.es_miembro())', t||'_del', t);
   end loop;
 end $$;
+
+-- Cierre de mes: congela los gastos e ingresos de un periodo (resumen = foto de los totales al cerrar)
+create table public.cierres_mes (
+  periodo date primary key check (extract(day from periodo) = 1),
+  resumen jsonb not null default '{}'::jsonb,
+  cerrado_por text default (auth.jwt() ->> 'email'),
+  cerrado_en timestamptz not null default now()
+);
+alter table public.cierres_mes enable row level security;
+create policy cierres_mes_sel on public.cierres_mes for select to authenticated using (public.es_miembro());
+create policy cierres_mes_ins on public.cierres_mes for insert to authenticated with check (public.es_miembro());
+create policy cierres_mes_upd on public.cierres_mes for update to authenticated using (public.es_miembro()) with check (public.es_miembro());
+create policy cierres_mes_del on public.cierres_mes for delete to authenticated using (public.es_miembro());
+
+-- Un mes cerrado no admite cambios en sus gastos ni ingresos.
+-- Excepción: las llaves foráneas "on delete set null" (borrar un ítem de la plantilla o una deuda).
+create or replace function public.validar_mes_abierto()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare cerrado date;
+begin
+  if tg_op = 'UPDATE' and tg_table_name = 'gastos'
+     and (to_jsonb(new) - 'concepto_id' - 'obligacion_id') = (to_jsonb(old) - 'concepto_id' - 'obligacion_id') then
+    return new;
+  end if;
+  select c.periodo into cerrado from public.cierres_mes c
+   where c.periodo = case when tg_op = 'INSERT' then new.periodo else old.periodo end
+      or (tg_op = 'UPDATE' and c.periodo = new.periodo)
+   limit 1;
+  if cerrado is not null then
+    raise exception 'El mes % está cerrado. Reábrelo para modificarlo.', to_char(cerrado, 'MM/YYYY') using errcode = 'P0001';
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $$;
+revoke execute on function public.validar_mes_abierto() from public, anon;
+create trigger gastos_mes_abierto before insert or update or delete on public.gastos
+  for each row execute function public.validar_mes_abierto();
+create trigger ingresos_mes_abierto before insert or update or delete on public.ingresos
+  for each row execute function public.validar_mes_abierto();

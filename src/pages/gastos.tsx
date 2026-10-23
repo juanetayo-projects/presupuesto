@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Lock, Pencil, Plus, Telescope, Trash2, Undo2 } from 'lucide-react'
 import { ResponsableBadge } from '@/components/responsable-badge'
 import { PanelConceptos } from '@/components/panel-conceptos'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -14,10 +14,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CategoryIcon } from '@/components/category-icon'
 import { IconoGasto } from '@/components/marca-icono'
 import { FilterBar } from '@/components/filter-bar'
+import { EstadoMesBanner } from '@/components/estado-mes'
 import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
 import { deshacerPago, eliminarGasto, generarMes } from '@/lib/api'
-import { diasHasta, fechaCorta, money, nombreMes, pctLabel } from '@/lib/format'
+import { diasHasta, fechaCorta, money, nombreMes, pctLabel, periodoActual } from '@/lib/format'
 import { aplicarFiltros, resumen, urgencia, valorGasto } from '@/lib/metrics'
 import type { Gasto } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -36,7 +37,9 @@ function useMinWidth(px: number) {
 }
 
 export function GastosPage() {
-  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, recargar } = useData()
+  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, recargar, estadoMes } = useData()
+  const estado = estadoMes(periodo)
+  const futuro = estado === 'futuro'
   const [filtros] = useFiltros('gastos')
   // Categorías contraídas (se recuerdan en este dispositivo). Al buscar texto se muestran todas abiertas.
   const [contraidas, setContraidas] = useState<Set<string>>(() => {
@@ -126,9 +129,13 @@ export function GastosPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Gastos de {nombreMes(periodo)}</h2>
+          <h2 className="text-xl font-semibold tracking-tight">
+            {futuro ? 'Valores estimados de' : 'Gastos de'} {nombreMes(periodo)}
+          </h2>
           <p className="text-sm text-muted-foreground tabular-nums">
-            {lista.length} gastos · {money(r.total)} · pagado {money(r.pagado)} · pendiente {money(r.pendiente)}
+            {futuro
+              ? `${lista.length} valores · ${money(r.total)} estimados a pagar${r.pagado ? ` · pagado por anticipado ${money(r.pagado)}` : ''}`
+              : `${lista.length} gastos · ${money(r.total)} · pagado ${money(r.pagado)} · pendiente ${money(r.pendiente)}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -148,7 +155,7 @@ export function GastosPage() {
           >
             <Download /> <span className="hidden sm:inline">Excel</span>
           </Button>
-          {faltantes > 0 && (
+          {faltantes > 0 && estado !== 'cerrado' && (
             <Button variant="outline" size="sm" onClick={completarMes} disabled={generando}>
               <CopyPlus /> {gastosMes.length ? `Agregar ${faltantes} de la plantilla` : 'Generar mes'}
             </Button>
@@ -161,6 +168,7 @@ export function GastosPage() {
 
       <div className={cn('grid items-start gap-4', grupoSel && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
       <div className="min-w-0 space-y-4">
+      <EstadoMesBanner periodo={periodo} />
       <FilterBar pagina="gastos" />
 
       {loading && <Skeleton className="h-64 rounded-xl" />}
@@ -188,15 +196,15 @@ export function GastosPage() {
       )}
 
       {vista === 'lista' &&
-        grupos.map(({ c, items, total }) => {
+        grupos.map(({ c, items, total }, idx) => {
           const abierta = buscando || !contraidas.has(c.id)
           const pendientes = items.filter((g) => g.estado === 'pendiente').length
           return (
             <section
               key={c.id}
               id={`cat-${c.id}`}
-              className={cn('scroll-mt-24 overflow-hidden rounded-xl border bg-card shadow-xs', catSel === c.id && 'ring-2 ring-offset-2 ring-offset-background')}
-              style={catSel === c.id ? ({ '--tw-ring-color': c.color } as React.CSSProperties) : undefined}
+              style={{ '--i': Math.min(idx, 8), ...(catSel === c.id ? { '--tw-ring-color': c.color } : {}) } as React.CSSProperties}
+              className={cn('reveal scroll-mt-24 overflow-hidden rounded-xl border bg-card shadow-xs', catSel === c.id && 'ring-2 ring-offset-2 ring-offset-background')}
             >
               <div
                 className="flex w-full items-center gap-2 border-l-4 pr-1 pl-3 sm:pl-4"
@@ -212,7 +220,9 @@ export function GastosPage() {
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate text-sm font-semibold">{c.nombre}</h3>
                     <p className="text-[11px] text-muted-foreground">
-                      {items.length} gasto(s){pendientes ? ` · ${pendientes} pendiente(s)` : ' · todo pagado'}
+                      {futuro
+                        ? `${items.length} valor(es) estimado(s)`
+                        : `${items.length} gasto(s)${pendientes ? ` · ${pendientes} pendiente(s)` : ' · todo pagado'}`}
                     </p>
                   </div>
                   <span className="text-sm font-semibold tabular-nums">{money(total)}</span>
@@ -267,10 +277,13 @@ export function GastosPage() {
 }
 
 function FilaGasto({ g }: { g: Gasto }) {
-  const { config, recargar } = useData()
+  const { config, recargar, estadoMes } = useData()
   const { abrirGasto, pagar } = useUi()
   const u = urgencia(g, config.diasAlerta)
   const pagado = g.estado === 'pagado'
+  const estado = estadoMes(g.periodo)
+  const cerrado = estado === 'cerrado'
+  const estimado = estado === 'futuro' && !pagado
 
   async function eliminar() {
     const enGrupo = Boolean(g.grupo_cuotas)
@@ -303,18 +316,29 @@ Aceptar: sólo esta cuota.`
     <div className={cn('flex items-center gap-3 px-3 py-3 sm:px-4', pagado && 'bg-muted/30')}>
       <button
         onClick={() => (pagado ? deshacer() : pagar(g))}
-        aria-label={pagado ? 'Deshacer pago' : 'Registrar pago'}
+        disabled={cerrado}
+        aria-label={cerrado ? 'Mes cerrado' : pagado ? 'Deshacer pago' : estimado ? 'Registrar pago anticipado' : 'Registrar pago'}
+        title={cerrado ? 'Mes cerrado: reábrelo para modificar' : undefined}
         className={cn(
-          'grid size-8 shrink-0 place-items-center rounded-full border-2 transition active:scale-90',
-          pagado ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-muted-foreground/30 text-transparent hover:border-emerald-500 hover:text-emerald-500',
+          'grid size-8 shrink-0 place-items-center rounded-full border-2 transition active:scale-90 disabled:cursor-not-allowed disabled:opacity-70',
+          pagado
+            ? 'pop border-emerald-500 bg-emerald-500 text-white'
+            : estimado
+              ? 'rayado border-dashed border-violet-400/60 text-transparent hover:border-emerald-500 hover:text-emerald-500'
+              : 'border-muted-foreground/30 text-transparent hover:border-emerald-500 hover:text-emerald-500',
         )}
       >
-        <Check className="size-4" strokeWidth={3} />
+        {cerrado && !pagado ? <Lock className="size-3.5 text-muted-foreground" /> : <Check className="size-4" strokeWidth={3} />}
       </button>
       <IconoGasto g={g} size="sm" />
       <button className="min-w-0 flex-1 text-left" onClick={() => abrirGasto(g)}>
         <div className="flex items-center gap-1.5">
           <p className={cn('truncate text-sm font-medium', pagado && 'text-muted-foreground line-through decoration-muted-foreground/40')}>{g.descripcion}</p>
+          {estimado && (
+            <Badge variant="outline" className="shrink-0 border-violet-500/40 px-1.5 text-[10px] text-violet-700 dark:text-violet-300">
+              <Telescope /> Estimado
+            </Badge>
+          )}
           {g.estado === 'pendiente' && Number(g.valor_presupuestado) === 0 && (
             <Badge variant="outline" className="shrink-0 border-amber-500/50 px-1.5 text-[10px] text-amber-700 dark:text-amber-300">
               Definir valor
@@ -349,14 +373,16 @@ Aceptar: sólo esta cuota.`
         <Button variant="ghost" size="icon-sm" aria-label="Editar" className="hidden sm:inline-flex" onClick={() => abrirGasto(g)}>
           <Pencil />
         </Button>
-        {pagado && (
+        {pagado && !cerrado && (
           <Button variant="ghost" size="icon-sm" aria-label="Deshacer pago" className="hidden sm:inline-flex" onClick={deshacer}>
             <Undo2 />
           </Button>
         )}
-        <Button variant="ghost" size="icon-sm" aria-label="Eliminar gasto" title="Eliminar" className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={eliminar}>
-          <Trash2 />
-        </Button>
+        {!cerrado && (
+          <Button variant="ghost" size="icon-sm" aria-label="Eliminar gasto" title="Eliminar" className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={eliminar}>
+            <Trash2 />
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -364,6 +390,7 @@ Aceptar: sólo esta cuota.`
 
 function EtiquetaFecha({ g, u }: { g: Gasto; u: ReturnType<typeof urgencia> }) {
   if (!g.fecha_limite) return <span>Sin fecha límite</span>
+  if (g.periodo > periodoActual()) return <span>A pagar el {fechaCorta(g.fecha_limite)}</span>
   const d = diasHasta(g.fecha_limite)
   if (u === 'vencido')
     return (

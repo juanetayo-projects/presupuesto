@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis, YAxis } from 'recharts'
 import { BarChart3 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { SlidingTabs, useReducedMotion } from '@/components/motion'
+import { useData } from '@/context/data'
 import { mesCorto, money, moneyShort, periodoMas } from '@/lib/format'
 import { valorGasto } from '@/lib/metrics'
 import type { Categoria, Gasto } from '@/lib/types'
@@ -20,8 +21,10 @@ interface Props {
  * "Concepto": un solo concepto elegido, barra por mes con su valor y % del total del mes.
  */
 export function MesAMes({ periodo, gastos, categorias }: Props) {
+  const { estadoMes } = useData()
+  const reduce = useReducedMotion()
   const [modo, setModo] = useState<'categoria' | 'concepto'>('categoria')
-  const [meses, setMeses] = useState('6')
+  const [meses, setMeses] = useState<'3' | '6' | '12'>('6')
   const conceptos = useMemo(() => [...new Set(gastos.map((g) => g.descripcion))].sort((a, b) => a.localeCompare(b)), [gastos])
   const [concepto, setConcepto] = useState('')
   const elegido = concepto && conceptos.includes(concepto) ? concepto : conceptos[0] ?? ''
@@ -36,7 +39,7 @@ export function MesAMes({ periodo, gastos, categorias }: Props) {
     const filas = periodos.map((p) => {
       const delMes = activos.filter((g) => g.periodo === p)
       const total = delMes.reduce((s, g) => s + valorGasto(g), 0)
-      const fila: Record<string, number | string> = { mes: mesCorto(p), total }
+      const fila: Record<string, number | string> = { mes: mesCorto(p), total, estado: estadoMes(p) }
       if (modo === 'categoria') {
         for (const c of usadas) fila[c.id] = delMes.filter((g) => g.categoria_id === c.id).reduce((s, g) => s + valorGasto(g), 0)
       } else {
@@ -47,7 +50,7 @@ export function MesAMes({ periodo, gastos, categorias }: Props) {
       return fila
     })
     return { filas, series: usadas }
-  }, [gastos, categorias, periodos, modo, elegido])
+  }, [gastos, categorias, periodos, modo, elegido, estadoMes])
 
   const config: ChartConfig =
     modo === 'categoria'
@@ -61,19 +64,20 @@ export function MesAMes({ periodo, gastos, categorias }: Props) {
           <BarChart3 className="size-4 text-primary" /> Gastos mes a mes
         </CardTitle>
         <CardDescription>
-          {modo === 'categoria' ? 'Total de cada mes, apilado por categoría' : `Valor de “${elegido}” por mes y su % del total de gastos del mes`}
+          {modo === 'categoria' ? 'Total de cada mes, apilado por categoría' : `Valor de “${elegido}” por mes y su % del total de gastos del mes`} · los meses
+          futuros (tono claro) son valores estimados
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <ToggleGroup type="single" variant="outline" size="sm" value={modo} onValueChange={(v) => v && setModo(v as 'categoria' | 'concepto')}>
-            <ToggleGroupItem value="categoria" className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-              Por categoría
-            </ToggleGroupItem>
-            <ToggleGroupItem value="concepto" className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-              Por concepto
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <SlidingTabs
+            value={modo}
+            onChange={setModo}
+            options={[
+              { value: 'categoria', label: 'Por categoría' },
+              { value: 'concepto', label: 'Por concepto' },
+            ]}
+          />
           {modo === 'concepto' && (
             <Select value={elegido} onValueChange={setConcepto}>
               <SelectTrigger size="sm" className="min-w-0 flex-1 sm:w-56 sm:flex-none">
@@ -88,16 +92,15 @@ export function MesAMes({ periodo, gastos, categorias }: Props) {
               </SelectContent>
             </Select>
           )}
-          <Select value={meses} onValueChange={setMeses}>
-            <SelectTrigger size="sm" className="w-28" aria-label="Rango de meses">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="3">3 meses</SelectItem>
-              <SelectItem value="6">6 meses</SelectItem>
-              <SelectItem value="12">12 meses</SelectItem>
-            </SelectContent>
-          </Select>
+          <SlidingTabs
+            value={meses}
+            onChange={setMeses}
+            options={[
+              { value: '3', label: '3 m' },
+              { value: '6', label: '6 m' },
+              { value: '12', label: '12 m' },
+            ]}
+          />
         </div>
 
         <ChartContainer config={config} className="aspect-auto h-72 w-full">
@@ -110,9 +113,13 @@ export function MesAMes({ periodo, gastos, categorias }: Props) {
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null
                 const fila = payload[0].payload as Record<string, number>
+                const estimado = (fila.estado as unknown) === 'futuro'
                 return (
                   <div className="grid min-w-48 gap-1 rounded-lg border bg-background px-3 py-2 text-xs shadow-xl">
-                    <p className="font-medium capitalize">{label}</p>
+                    <p className="font-medium capitalize">
+                      {label}
+                      {estimado && <span className="ml-1 font-normal text-violet-600 dark:text-violet-300">· estimado a pagar</span>}
+                    </p>
                     {modo === 'categoria' ? (
                       <>
                         {[...series]
@@ -127,7 +134,7 @@ export function MesAMes({ periodo, gastos, categorias }: Props) {
                             </div>
                           ))}
                         <div className="mt-1 flex border-t pt-1 font-medium">
-                          Total <span className="ml-auto tabular-nums">{money(fila.total)}</span>
+                          {estimado ? 'Total estimado' : 'Total'} <span className="ml-auto tabular-nums">{money(fila.total)}</span>
                         </div>
                       </>
                     ) : (
@@ -153,15 +160,22 @@ export function MesAMes({ periodo, gastos, categorias }: Props) {
                   strokeWidth={1}
                   maxBarSize={44}
                   radius={i === series.length - 1 ? [4, 4, 0, 0] : 0}
-                  isAnimationActive={false}
+                  isAnimationActive={!reduce}
+                  animationDuration={650}
                 >
+                  {filas.map((f) => (
+                    <Cell key={String(f.mes)} fillOpacity={f.estado === 'futuro' ? 0.38 : 1} />
+                  ))}
                   {i === series.length - 1 && (
                     <LabelList dataKey="total" position="top" className="fill-foreground text-[10px] tabular-nums" formatter={(v) => (Number(v) ? moneyShort(Number(v)) : '')} />
                   )}
                 </Bar>
               ))
             ) : (
-              <Bar dataKey="valor" fill="var(--color-valor)" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false}>
+              <Bar dataKey="valor" fill="var(--color-valor)" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={!reduce} animationDuration={650}>
+                {filas.map((f) => (
+                  <Cell key={String(f.mes)} fillOpacity={f.estado === 'futuro' ? 0.38 : 1} />
+                ))}
                 <LabelList dataKey="pct" position="top" className="fill-foreground text-[10px] tabular-nums" formatter={(v) => (Number(v) ? `${Number(v).toFixed(1)}%` : '')} />
               </Bar>
             )}

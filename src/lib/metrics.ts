@@ -1,6 +1,6 @@
 import { diasHasta } from './format'
 import type { Filtros } from '@/context/data'
-import type { Categoria, Gasto, Ingreso } from './types'
+import type { Categoria, EstadoMes, Gasto, Ingreso, ObligacionVista } from './types'
 
 export type Urgencia = 'pagado' | 'vencido' | 'hoy' | 'pronto' | 'normal' | 'sin_fecha'
 
@@ -117,4 +117,57 @@ export function porConcepto(gastos: Gasto[], catPorId: Map<string, Categoria>): 
       })),
     }))
     .sort((a, b) => b.valor - a.valor)
+}
+
+/** Último día (yyyy-mm-dd) del mes de un periodo 'yyyy-mm-01'. */
+export function finDeMes(periodo: string) {
+  const [y, m] = periodo.split('-').map(Number)
+  const ultimo = new Date(y, m, 0).getDate()
+  return `${periodo.slice(0, 8)}${String(ultimo).padStart(2, '0')}`
+}
+
+/**
+ * Saldo total de las deudas al cierre del mes indicado (no el saldo de hoy):
+ * saldo inicial menos los abonos pagados hasta el último día de ese mes.
+ * En meses futuros además descuenta las cuotas estimadas pendientes hasta ese mes (saldo proyectado).
+ */
+export function deudaAlMes(periodo: string, obligaciones: ObligacionVista[], gastos: Gasto[], estado: EstadoMes) {
+  const fin = finDeMes(periodo)
+  let total = 0
+  for (const o of obligaciones) {
+    if (o.tipo === 'cadena' || !o.activo || o.saldo_inicial == null) continue
+    const desde = o.fecha_saldo ?? '1900-01-01'
+    let abonos = 0
+    for (const g of gastos) {
+      if (g.obligacion_id !== o.id) continue
+      const fecha = g.fecha_pago ?? finDeMes(g.periodo)
+      if (g.estado === 'pagado' && fecha >= desde && fecha <= fin) {
+        abonos += Number(g.abono_capital ?? g.valor_pagado ?? 0)
+      } else if (estado === 'futuro' && g.estado === 'pendiente' && g.periodo <= periodo && (!g.fecha_limite || g.fecha_limite >= desde)) {
+        abonos += Number(g.valor_presupuestado)
+      }
+    }
+    total += Math.max(0, Number(o.saldo_inicial) - abonos)
+  }
+  return total
+}
+
+/**
+ * Valor de un gasto en el histórico mes a mes.
+ * - 'real': en meses pasados/actual sólo cuenta lo pagado (el gasto realizado);
+ *   en meses futuros, lo presupuestado (valor estimado a pagar).
+ * - 'presupuesto': siempre lo presupuestado.
+ */
+export function valorHistorico(g: Gasto, estado: EstadoMes, modo: 'real' | 'presupuesto') {
+  if (g.estado === 'omitido') return 0
+  if (modo === 'presupuesto') return Number(g.valor_presupuestado)
+  if (estado === 'futuro') return valorGasto(g)
+  return g.estado === 'pagado' ? Number(g.valor_pagado ?? g.valor_presupuestado) : 0
+}
+
+export const ETIQUETA_MES: Record<EstadoMes, string> = {
+  cerrado: 'Cerrado',
+  pasado: 'Sin cerrar',
+  actual: 'En curso',
+  futuro: 'Estimado',
 }

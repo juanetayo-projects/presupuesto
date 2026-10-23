@@ -135,3 +135,52 @@
   html { -webkit-tap-highlight-color: transparent; }
   input[type=date], input[type=month] { min-height: 2rem; }
 }
+
+/* ── Motion (modelo docs/modelo.mp4) ─────────────────────────────── */
+@layer utilities {
+  /* Tarjetas que entran escalonadas: style={{ '--i': n }} */
+  .reveal {
+    animation: reveal 520ms cubic-bezier(.2, .8, .2, 1) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+  /* Check que "salta" al confirmarse (Code → verified) */
+  .pop { animation: pop 420ms cubic-bezier(.3, 1.6, .5, 1) both; }
+  /* Barra que se llena como la batería, con un brillo que la recorre */
+  .barra-carga {
+    position: relative;
+    transition: width 900ms cubic-bezier(.2, .8, .2, 1);
+    overflow: hidden;
+  }
+  .barra-carga::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / .45), transparent);
+    transform: translateX(-100%);
+    animation: brillo 1.6s ease-out 900ms 1;
+  }
+  /* Punto del mes en curso que late (Mic → ripples) */
+  .latido { position: relative; }
+  .latido::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    animation: latido 1.8s ease-out infinite;
+  }
+  /* Rayado de los valores estimados (meses futuros) */
+  .rayado {
+    background-image: repeating-linear-gradient(135deg, color-mix(in srgb, currentColor 14%, transparent) 0 6px, transparent 6px 12px);
+  }
+}
+
+@keyframes reveal { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes pop { 0% { transform: scale(.4); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes brillo { to { transform: translateX(100%); } }
+@keyframes latido { 0% { opacity: .7; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.9); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .pop, .barra-carga::after, .latido::before { animation: none !important; }
+  .barra-carga { transition: none; }
+}
