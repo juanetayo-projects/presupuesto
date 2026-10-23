@@ -1,6 +1,6 @@
 import { diasHasta } from './format'
 import type { Filtros } from '@/context/data'
-import type { Categoria, EstadoMes, Gasto, Ingreso, ObligacionVista } from './types'
+import type { Categoria, EstadoMes, Gasto, Ingreso, Movimiento, ObligacionVista } from './types'
 
 export type Urgencia = 'pagado' | 'vencido' | 'hoy' | 'pronto' | 'normal' | 'sin_fecha'
 
@@ -128,23 +128,24 @@ export function finDeMes(periodo: string) {
 
 /**
  * Saldo total de las deudas al cierre del mes indicado (no el saldo de hoy):
- * saldo inicial menos los abonos pagados hasta el último día de ese mes.
- * En meses futuros además descuenta las cuotas estimadas pendientes hasta ese mes (saldo proyectado).
+ * saldo inicial menos los abonos reales (movimientos) hasta el último día de ese mes.
+ * En meses futuros además descuenta las cuotas pendientes del plan hasta ese mes (saldo proyectado).
  */
-export function deudaAlMes(periodo: string, obligaciones: ObligacionVista[], gastos: Gasto[], estado: EstadoMes) {
+export function deudaAlMes(periodo: string, obligaciones: ObligacionVista[], movimientos: Movimiento[], gastos: Gasto[], estado: EstadoMes) {
   const fin = finDeMes(periodo)
   let total = 0
   for (const o of obligaciones) {
     if (o.tipo === 'cadena' || !o.activo || o.saldo_inicial == null) continue
     const desde = o.fecha_saldo ?? '1900-01-01'
     let abonos = 0
-    for (const g of gastos) {
-      if (g.obligacion_id !== o.id) continue
-      const fecha = g.fecha_pago ?? finDeMes(g.periodo)
-      if (g.estado === 'pagado' && fecha >= desde && fecha <= fin) {
-        abonos += Number(g.abono_capital ?? g.valor_pagado ?? 0)
-      } else if (estado === 'futuro' && g.estado === 'pendiente' && g.periodo <= periodo && (!g.fecha_limite || g.fecha_limite >= desde)) {
-        abonos += Number(g.valor_presupuestado)
+    for (const m of movimientos) {
+      if (m.tipo === 'gasto' && m.obligacion_id === o.id && m.fecha >= desde && m.fecha <= fin) abonos += Number(m.abono_capital ?? m.valor)
+    }
+    if (estado === 'futuro') {
+      for (const g of gastos) {
+        if (g.obligacion_id === o.id && g.estado === 'pendiente' && g.periodo <= periodo && (!g.fecha_limite || g.fecha_limite >= desde)) {
+          abonos += Number(g.valor_presupuestado)
+        }
       }
     }
     total += Math.max(0, Number(o.saldo_inicial) - abonos)
@@ -152,17 +153,46 @@ export function deudaAlMes(periodo: string, obligaciones: ObligacionVista[], gas
   return total
 }
 
+/** Un movimiento de gasto con la forma de un Gasto pagado, para reutilizar gráficas, filtros y tablas. */
+export function movComoGasto(m: Movimiento): Gasto {
+  return {
+    id: m.id,
+    periodo: m.periodo,
+    concepto_id: null,
+    categoria_id: m.categoria_id ?? '',
+    obligacion_id: m.obligacion_id,
+    descripcion: m.descripcion,
+    medio_pago: m.medio_pago,
+    valor_presupuestado: Number(m.valor),
+    valor_pagado: Number(m.valor),
+    abono_capital: m.abono_capital,
+    fecha_limite: m.fecha,
+    fecha_pago: m.fecha,
+    estado: 'pagado',
+    grupo_cuotas: null,
+    cuota_num: null,
+    cuotas_total: null,
+    notas: m.notas,
+    pagado_por: m.pagado_por,
+    responsable: m.responsable,
+  }
+}
+
 /**
- * Valor de un gasto en el histórico mes a mes.
- * - 'real': en meses pasados/actual sólo cuenta lo pagado (el gasto realizado);
- *   en meses futuros, lo presupuestado (valor estimado a pagar).
- * - 'presupuesto': siempre lo presupuestado.
+ * Líneas de gasto que cuentan para un conjunto de meses:
+ * lo REAL (movimientos) en meses pasados y el actual, el PLAN (compromisos) en meses futuros.
  */
-export function valorHistorico(g: Gasto, estado: EstadoMes, modo: 'real' | 'presupuesto') {
-  if (g.estado === 'omitido') return 0
-  if (modo === 'presupuesto') return Number(g.valor_presupuestado)
-  if (estado === 'futuro') return valorGasto(g)
-  return g.estado === 'pagado' ? Number(g.valor_pagado ?? g.valor_presupuestado) : 0
+export function lineasGasto(gastos: Gasto[], movimientos: Movimiento[], estadoMes: (p: string) => EstadoMes) {
+  const reales = movimientos.filter((m) => m.tipo === 'gasto' && estadoMes(m.periodo) !== 'futuro').map(movComoGasto)
+  const plan = gastos.filter((g) => g.estado !== 'omitido' && estadoMes(g.periodo) === 'futuro')
+  return [...reales, ...plan]
+}
+
+/** Ingresos de un mes: los recibidos (movimientos) en meses pasados/actual; los esperados (plan) en meses futuros. */
+export function ingresoMes(periodo: string, estado: EstadoMes, movimientos: Movimiento[], ingresos: Ingreso[]) {
+  const esperado = ingresos.filter((i) => i.periodo === periodo).reduce((s, i) => s + Number(i.valor), 0)
+  const recibido = movimientos.filter((m) => m.tipo === 'ingreso' && m.periodo === periodo).reduce((s, m) => s + Number(m.valor), 0)
+  return { esperado, recibido, valor: estado === 'futuro' ? esperado : recibido }
 }
 
 export const ETIQUETA_MES: Record<EstadoMes, string> = {

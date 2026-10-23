@@ -17,7 +17,12 @@ App web mobile-first (instalable como PWA) para llevar el presupuesto mensual de
 
 ## Funcionalidades
 
-- **Inicio**: KPIs (ingreso, total de gastos, pagado, por pagar, disponible, deuda), alertas de pago, donut por categoría y barras por concepto (en % del total de gastos), tendencia de 6 meses, regla 50/30/20, metas y ejecución por categoría.
+> **Lógica de la app: Plan vs. Real.** El **plan** (tabla `gastos`) son los compromisos que se espera pagar cada mes (cuotas, servicios, tarjetas), generados desde la plantilla. Lo **real** (tabla `movimientos`) son los gastos que se pagaron y los ingresos que se recibieron; cada uno queda en el mes de **su fecha**. Pagar un compromiso crea su movimiento (un trigger lo marca como pagado); un gasto imprevisto es un movimiento sin compromiso. Los meses futuros sólo tienen plan (estimado a pagar).
+
+- **Movimientos**: registro en un paso de gastos pagados e ingresos recibidos, filtros por rango de fechas, categoría y persona, enlace opcional a un compromiso del plan y a una deuda, exportación a Excel.
+- **Plan**: compromisos del mes (antes "Gastos"): lista por categoría o calendario, cuotas, pagar con un toque.
+
+- **Inicio**: KPIs (ingresos recibidos, gastado, plan del mes, por pagar del plan, balance, deuda al cierre del mes), comparativo con el mes anterior, plan vs. real por categoría, alertas de pago, donut por categoría y barras por concepto (en % del total de gastos), tendencia de 6 meses, regla 50/30/20, metas y ejecución por categoría.
 - **Gastos**: lista agrupada por categoría o **calendario de pagos**; filtros por categoría, medio de pago y estado; pago con un toque (valor, fecha, quién pagó, abono a capital); gastos divididos en **N cuotas**; exportación a Excel.
 - **Histórico**: tabla mes a mes por categoría (expandible a conceptos) con lo realmente pagado, ingreso y disponible; gráfico de evolución por categoría; exportación a Excel. Los meses futuros se muestran como **valores estimados a pagar**.
 - **Cierre de mes**: un mes cerrado queda congelado en la base (trigger `validar_mes_abierto`) y sus cifras no cambian al trabajar en otros meses. La deuda del Inicio se calcula al cierre del mes elegido.

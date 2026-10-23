@@ -27,7 +27,7 @@ export function IngresosCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Wallet className="size-4 text-primary" /> Ingresos de {nombreMes(periodo)}
+          <Wallet className="size-4 text-primary" /> Ingresos esperados de {nombreMes(periodo)}
         </CardTitle>
         <CardDescription>Salario, primas, arriendos, ventas, ingresos extra… Total {money(total)}</CardDescription>
       </CardHeader>
@@ -117,7 +117,7 @@ export function IngresoForm({ ingreso, onClose }: { ingreso: Partial<Ingreso> | 
     <ResponsiveModal
       open={Boolean(ingreso)}
       onOpenChange={(v) => !v && onClose()}
-      title={editando ? 'Editar ingreso' : 'Nuevo ingreso'}
+      title={editando ? 'Editar ingreso esperado' : 'Nuevo ingreso esperado'}
       description="Cualquier entrada de dinero del hogar."
       footer={
         <>

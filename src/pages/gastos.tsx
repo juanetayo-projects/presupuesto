@@ -129,14 +129,13 @@ export function GastosPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">
-            {futuro ? 'Valores estimados de' : 'Gastos de'} {nombreMes(periodo)}
-          </h2>
+          <h2 className="text-xl font-semibold tracking-tight">Plan de {nombreMes(periodo)}</h2>
           <p className="text-sm text-muted-foreground tabular-nums">
             {futuro
-              ? `${lista.length} valores · ${money(r.total)} estimados a pagar${r.pagado ? ` · pagado por anticipado ${money(r.pagado)}` : ''}`
-              : `${lista.length} gastos · ${money(r.total)} · pagado ${money(r.pagado)} · pendiente ${money(r.pendiente)}`}
+              ? `${lista.length} compromisos · ${money(r.total)} estimados a pagar${r.pagado ? ` · pagado por anticipado ${money(r.pagado)}` : ''}`
+              : `${lista.length} compromisos · presupuesto ${money(r.presupuestado)} · pagado ${money(r.pagado)} · pendiente ${money(r.pendiente)}`}
           </p>
+          <p className="text-xs text-muted-foreground">Lo que se espera pagar. Al marcar un compromiso como pagado se registra su movimiento real.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <ToggleGroup type="single" variant="outline" size="sm" value={vista} onValueChange={cambiarVista}>
@@ -160,8 +159,8 @@ export function GastosPage() {
               <CopyPlus /> {gastosMes.length ? `Agregar ${faltantes} de la plantilla` : 'Generar mes'}
             </Button>
           )}
-          <Button size="sm" className="hidden md:inline-flex" onClick={() => abrirGasto()}>
-            <Plus /> Nuevo gasto
+          <Button size="sm" onClick={() => abrirGasto()}>
+            <Plus /> Nuevo compromiso
           </Button>
         </div>
       </div>
@@ -175,7 +174,7 @@ export function GastosPage() {
 
       {!loading && vista === 'lista' && grupos.length === 0 && (
         <Card className="items-center p-10 text-center text-sm text-muted-foreground">
-          {gastosMes.length ? 'Ningún gasto coincide con los filtros.' : 'Este mes no tiene gastos todavía.'}
+          {gastosMes.length ? 'Ningún compromiso coincide con los filtros.' : 'Este mes no tiene plan todavía. Genéralo desde la plantilla o agrega compromisos.'}
         </Card>
       )}
 
@@ -222,7 +221,7 @@ export function GastosPage() {
                     <p className="text-[11px] text-muted-foreground">
                       {futuro
                         ? `${items.length} valor(es) estimado(s)`
-                        : `${items.length} gasto(s)${pendientes ? ` · ${pendientes} pendiente(s)` : ' · todo pagado'}`}
+                        : `${items.length} compromiso(s)${pendientes ? ` · ${pendientes} pendiente(s)` : ' · todo pagado'}`}
                     </p>
                   </div>
                   <span className="text-sm font-semibold tabular-nums">{money(total)}</span>
@@ -291,7 +290,7 @@ function FilaGasto({ g }: { g: Gasto }) {
       ? `¿Eliminar "${g.descripcion}" (cuota ${g.cuota_num}/${g.cuotas_total})?
 
 Aceptar: sólo esta cuota.`
-      : `¿Eliminar "${g.descripcion}" de este mes?`
+      : `¿Quitar "${g.descripcion}" del plan de este mes?${g.estado === 'pagado' ? '\n\nSu pago se conserva en Movimientos.' : ''}`
     if (!window.confirm(msg)) return
     try {
       await eliminarGasto(g, false)

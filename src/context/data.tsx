@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { toast } from 'sonner'
 import { cargarTodo } from '@/lib/api'
 import { periodoActual } from '@/lib/format'
-import type { Categoria, CierreMes, Concepto, EstadoMes, Gasto, Ingreso, Meta, Miembro, ObligacionVista } from '@/lib/types'
+import type { Categoria, CierreMes, Concepto, EstadoMes, Gasto, Ingreso, Meta, Miembro, Movimiento, ObligacionVista } from '@/lib/types'
 
 export interface Filtros {
   categoria: string // 'todas' | id
@@ -19,8 +19,12 @@ interface DataState {
   categorias: Categoria[]
   conceptos: Concepto[]
   obligaciones: ObligacionVista[]
+  /** Plan: compromisos de cada mes (lo que se espera pagar). */
   gastos: Gasto[]
+  /** Plan: ingresos esperados de cada mes. */
   ingresos: Ingreso[]
+  /** Real: gastos pagados e ingresos recibidos. */
+  movimientos: Movimiento[]
   miembros: Miembro[]
   metas: Meta[]
   cierres: CierreMes[]
@@ -95,6 +99,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     obligaciones: data?.obligaciones ?? [],
     gastos: data?.gastos ?? [],
     ingresos: data?.ingresos ?? [],
+    movimientos: data?.movimientos ?? [],
     miembros: data?.miembros ?? [],
     metas: data?.metas ?? [],
     cierres: data?.cierres ?? [],

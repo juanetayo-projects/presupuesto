@@ -11,9 +11,9 @@ const activo = 'border-primary/60 bg-primary/10 text-primary font-medium'
 const itemEstado = 'flex-1 sm:flex-none data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary'
 
 export function FilterBar({ pagina, buscar = true }: { pagina: string; buscar?: boolean }) {
-  const { categorias, gastos, config } = useData()
+  const { categorias, gastos, movimientos, config } = useData()
   const [filtros, setFiltros] = useFiltros(pagina)
-  const medios = useMemo(() => [...new Set(gastos.map((g) => g.medio_pago ?? 'Sin medio'))].sort(), [gastos])
+  const medios = useMemo(() => [...new Set([...gastos, ...movimientos].map((g) => g.medio_pago ?? 'Sin medio'))].sort(), [gastos, movimientos])
   const nActivos =
     Number(filtros.categoria !== 'todas') + Number(filtros.medio !== 'todos') + Number((filtros.responsable ?? 'todos') !== 'todos') + Number(filtros.estado !== 'todos') + Number(filtros.texto.trim() !== '')
 

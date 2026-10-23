@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Line, Pie, PieChart, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, ArrowDownRight, ChevronDown, Copy, Download, Scissors, BellRing, CalendarClock, CheckCircle2, CircleDollarSign, Landmark, PiggyBank, Receipt, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowDownRight, ArrowLeftRight, CheckCircle2, ChevronDown, Copy, Download, Plus, Scissors, BellRing, CalendarCheck, CalendarClock, Landmark, PiggyBank, Receipt, Scale, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,28 +26,45 @@ import { useAlertasNavegador } from '@/hooks/use-alertas'
 import { copiarMesAnterior, generarMes } from '@/lib/api'
 import { exportarMesExcel } from '@/lib/export'
 import { diasHasta, fechaCorta, mesCorto, money, moneyShort, nombreMes, pct, pctLabel, periodoMas } from '@/lib/format'
-import { aplicarFiltros, deudaAlMes, porCategoria, porConcepto, resumen, valorGasto, type Porcion } from '@/lib/metrics'
+import { aplicarFiltros, deudaAlMes, ingresoMes, lineasGasto, porCategoria, porConcepto, resumen, valorGasto, type Porcion } from '@/lib/metrics'
 import type { EstadoMes } from '@/lib/types'
 import type { Ingreso } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export function DashboardPage() {
-  const { loading, periodo, gastos, ingresos, categorias, conceptos, obligaciones, config, catPorId, recargar, estadoMes } = useData()
+  const { loading, periodo, gastos, ingresos, movimientos, categorias, conceptos, obligaciones, config, catPorId, recargar, estadoMes } = useData()
   const estado = estadoMes(periodo)
   const futuro = estado === 'futuro'
   const [filtros] = useFiltros('inicio')
-  const { pagar } = useUi()
+  const { pagar, abrirMovimiento } = useUi()
   const { alertas, cortes } = useAlertasNavegador()
   const [generando, setGenerando] = useState(false)
   const [nuevoIngreso, setNuevoIngreso] = useState<Partial<Ingreso> | null>(null)
 
+  // PLAN: compromisos del mes
   const gastosMes = useMemo(() => gastos.filter((g) => g.periodo === periodo), [gastos, periodo])
   const ingresosMes = useMemo(() => ingresos.filter((i) => i.periodo === periodo), [ingresos, periodo])
-  const filtrados = useMemo(() => aplicarFiltros(gastosMes, { ...filtros, texto: '' }, config.diasAlerta), [gastosMes, filtros, config.diasAlerta])
-  const r = useMemo(() => resumen(filtrados, ingresosMes), [filtrados, ingresosMes])
-  const todosFiltrados = useMemo(() => aplicarFiltros(gastos, { ...filtros, texto: '' }, config.diasAlerta), [gastos, filtros, config.diasAlerta])
-  const cats = useMemo(() => porCategoria(filtrados, categorias), [filtrados, categorias])
-  const items = useMemo(() => porConcepto(filtrados, catPorId), [filtrados, catPorId])
+  const planFiltrado = useMemo(() => aplicarFiltros(gastosMes, { ...filtros, texto: '' }, config.diasAlerta), [gastosMes, filtros, config.diasAlerta])
+  const plan = useMemo(() => resumen(planFiltrado, ingresosMes), [planFiltrado, ingresosMes])
+
+  // REAL: movimientos en meses pasados y el actual; en meses futuros, el plan (estimado)
+  const lineas = useMemo(
+    () => aplicarFiltros(lineasGasto(gastos, movimientos, estadoMes), { ...filtros, texto: '', estado: 'todos' }, config.diasAlerta),
+    [gastos, movimientos, estadoMes, filtros, config.diasAlerta],
+  )
+  const lineasMes = useMemo(() => lineas.filter((g) => g.periodo === periodo), [lineas, periodo])
+  const movsMes = movimientos.filter((m) => m.periodo === periodo)
+  const gastado = lineasMes.reduce((s, g) => s + valorGasto(g), 0)
+  const ing = ingresoMes(periodo, estado, movimientos, ingresos)
+  const baseIngreso = ing.valor || ing.esperado
+  const balance = ing.valor - gastado
+  const cats = useMemo(() => porCategoria(lineasMes, categorias), [lineasMes, categorias])
+  const items = useMemo(() => porConcepto(lineasMes, catPorId), [lineasMes, catPorId])
+
+  // Comparativo con el mes anterior
+  const anterior = periodoMas(periodo, -1)
+  const gastadoAnt = lineas.filter((g) => g.periodo === anterior).reduce((s, g) => s + valorGasto(g), 0)
+  const variacion = gastadoAnt ? ((gastado - gastadoAnt) / gastadoAnt) * 100 : null
 
   // Filtros propios de la gráfica de tendencia (además de los filtros de la página)
   const [tendCat, setTendCat] = useState('todas')
@@ -55,31 +72,29 @@ export function DashboardPage() {
   const mesesTend = useMemo(() => Array.from({ length: 6 }, (_, i) => periodoMas(periodo, i - 5)), [periodo])
   const conceptosTend = useMemo(
     () =>
-      [...new Set(todosFiltrados.filter((g) => mesesTend.includes(g.periodo) && (tendCat === 'todas' || g.categoria_id === tendCat)).map((g) => g.descripcion))].sort((a, b) =>
+      [...new Set(lineas.filter((g) => mesesTend.includes(g.periodo) && (tendCat === 'todas' || g.categoria_id === tendCat)).map((g) => g.descripcion))].sort((a, b) =>
         a.localeCompare(b),
       ),
-    [todosFiltrados, mesesTend, tendCat],
+    [lineas, mesesTend, tendCat],
   )
   const tendencia = useMemo(() => {
     return mesesTend.map((p) => {
-      const gs = todosFiltrados.filter(
-        (g) => g.periodo === p && g.estado !== 'omitido' && (tendCat === 'todas' || g.categoria_id === tendCat) && (tendConc === 'todos' || g.descripcion === tendConc),
-      )
-      const ing = ingresos.filter((x) => x.periodo === p).reduce((s, x) => s + Number(x.valor), 0)
+      const gs = lineas.filter((g) => g.periodo === p && (tendCat === 'todas' || g.categoria_id === tendCat) && (tendConc === 'todos' || g.descripcion === tendConc))
+      const e = estadoMes(p)
       const total = gs.reduce((s, g) => s + valorGasto(g), 0)
-      return { mes: mesCorto(p), gastos: total, ingreso: ing || null, estado: estadoMes(p) }
+      return { mes: mesCorto(p), gastos: total, ingreso: ingresoMes(p, e, movimientos, ingresos).valor || null, estado: e }
     })
-  }, [todosFiltrados, ingresos, mesesTend, tendCat, tendConc, estadoMes])
+  }, [lineas, ingresos, movimientos, mesesTend, tendCat, tendConc, estadoMes])
 
   // Saldo de las deudas al cierre del mes elegido (no el de hoy), para que cada mes conserve su propia cifra
-  const deudaTotal = useMemo(() => deudaAlMes(periodo, obligaciones, gastos, estado), [periodo, obligaciones, gastos, estado])
+  const deudaTotal = useMemo(() => deudaAlMes(periodo, obligaciones, movimientos, gastos, estado), [periodo, obligaciones, movimientos, gastos, estado])
   const sinSaldo = obligaciones.filter((o) => o.tipo !== 'cadena' && o.saldo_inicial == null).length
 
   async function generar() {
     setGenerando(true)
     try {
       const n = await generarMes(periodo, conceptos, gastosMes, ingresosMes, config.ingresoBase)
-      toast.success(n ? `Se crearon ${n} gastos para ${nombreMes(periodo)}` : 'El mes ya tenía todos los conceptos')
+      toast.success(n ? `Se crearon ${n} compromisos en el plan de ${nombreMes(periodo)}` : 'El plan ya tenía todos los conceptos')
       await recargar()
     } catch (e) {
       toast.error('No se pudo generar el mes', { description: (e as Error).message })
@@ -88,14 +103,13 @@ export function DashboardPage() {
     }
   }
 
-  const anterior = periodoMas(periodo, -1)
   const gastosAnt = gastos.filter((g) => g.periodo === anterior)
 
   async function copiar() {
     setGenerando(true)
     try {
       const n = await copiarMesAnterior(periodo, gastosAnt, ingresos.filter((i) => i.periodo === anterior), ingresosMes, conceptos)
-      toast.success(`Se copiaron ${n} gastos de ${nombreMes(anterior)}`)
+      toast.success(`Se copiaron ${n} compromisos de ${nombreMes(anterior)}`)
       await recargar()
     } catch (e) {
       toast.error('No se pudo copiar', { description: (e as Error).message })
@@ -106,24 +120,29 @@ export function DashboardPage() {
 
   if (loading) return <DashboardSkeleton />
 
-  if (gastosMes.length === 0) {
+  if (gastosMes.length === 0 && movsMes.length === 0) {
     return (
       <Card className="mx-auto mt-8 max-w-md text-center">
         <CardHeader>
           <div className="mx-auto mb-2 grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
             <CalendarClock className="size-6" />
           </div>
-          <CardTitle>{nombreMes(periodo)} aún no tiene {futuro ? 'valores estimados' : 'presupuesto'}</CardTitle>
+          <CardTitle>{nombreMes(periodo)} aún no tiene plan ni movimientos</CardTitle>
           <CardDescription>
-            Se crean los {conceptos.filter((c) => c.activo && c.recurrente).length} gastos recurrentes de la plantilla y el ingreso base de{' '}
-            {money(config.ingresoBase)}. Después puedes ajustar valores y agregar otros gastos.
+            Genera el plan con los {conceptos.filter((c) => c.activo && c.recurrente).length} compromisos recurrentes de la plantilla y el ingreso esperado de{' '}
+            {money(config.ingresoBase)}, o registra directamente lo que ya pagaste o recibiste.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2">
             <Button onClick={generar} disabled={generando} className="w-full">
-              {generando ? 'Generando…' : `Generar desde la plantilla`}
+              {generando ? 'Generando…' : `Generar el plan desde la plantilla`}
             </Button>
+            {!futuro && (
+              <Button variant="outline" onClick={() => abrirMovimiento()} className="w-full">
+                <Plus /> Registrar un movimiento
+              </Button>
+            )}
             {gastosAnt.length > 0 && (
               <Button variant="outline" onClick={copiar} disabled={generando} className="w-full">
                 <Copy /> Copiar valores de {nombreMes(anterior)}
@@ -135,8 +154,9 @@ export function DashboardPage() {
     )
   }
 
-  const usoIngreso = pct(r.total, r.ingreso)
-  const ejecucion = pct(r.pagado, r.presupuestado)
+  const usoIngreso = pct(gastado, baseIngreso)
+  const ejecucion = pct(plan.pagado, plan.presupuestado)
+  const flecha = variacion === null ? '' : `${variacion > 0 ? '▲' : '▼'} ${Math.abs(variacion).toFixed(0)}% vs ${mesCorto(anterior)}`
 
   return (
     <div className="space-y-4">
@@ -146,16 +166,27 @@ export function DashboardPage() {
             {futuro ? 'Estimado de' : 'Resumen de'} {nombreMes(periodo)}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Los porcentajes de las gráficas son respecto del total {futuro ? 'estimado' : 'de gastos'} del mes ({money(r.total)}).
+            {futuro
+              ? `Mes futuro: todo es plan (estimado a pagar). Porcentajes respecto de ${money(gastado)}.`
+              : `Gastado = lo realmente pagado (Movimientos). Plan = lo que se esperaba pagar. Porcentajes respecto de ${money(gastado)}.`}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => exportarMesExcel(periodo, filtrados, ingresosMes, categorias, obligaciones).catch((e) => toast.error('No se pudo exportar', { description: e.message }))}
-        >
-          <Download /> <span className="hidden sm:inline">Excel</span>
-        </Button>
+        <div className="flex gap-2">
+          {!futuro && (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/movimientos">
+                <ArrowLeftRight /> <span className="hidden sm:inline">Movimientos</span>
+              </Link>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportarMesExcel(periodo, planFiltrado, ingresosMes, categorias, obligaciones).catch((e) => toast.error('No se pudo exportar', { description: e.message }))}
+          >
+            <Download /> <span className="hidden sm:inline">Plan</span>
+          </Button>
+        </div>
       </div>
 
       <EstadoMesBanner periodo={periodo} />
@@ -163,42 +194,66 @@ export function DashboardPage() {
       <FilterBar pagina="inicio" buscar={false} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiCard
-          solid
-          i={0}
-          label={futuro ? 'Ingreso estimado' : 'Ingreso del mes'}
-          value={r.ingreso}
-          icon={Wallet}
-          tone="brand"
-          hint={`${ingresosMes.length} ingreso(s) · toca para agregar`}
-          onClick={() => setNuevoIngreso({ periodo, tipo: 'Otro', valor: 0 })}
-        />
+        {futuro ? (
+          <KpiCard
+            solid
+            i={0}
+            label="Ingreso esperado"
+            value={ing.esperado}
+            icon={Wallet}
+            tone="brand"
+            hint={`${ingresosMes.length} ingreso(s) · toca para agregar`}
+            onClick={() => setNuevoIngreso({ periodo, tipo: 'Otro', valor: 0 })}
+          />
+        ) : (
+          <KpiCard
+            solid
+            i={0}
+            label="Ingresos recibidos"
+            value={ing.recibido}
+            icon={Wallet}
+            tone="brand"
+            progress={ing.esperado ? pct(ing.recibido, ing.esperado) : undefined}
+            hint={ing.esperado ? `de ${money(ing.esperado)} esperados · toca para registrar` : 'Toca para registrar un ingreso'}
+            onClick={() =>
+              abrirMovimiento({ tipo: 'ingreso', valor: Math.max(0, ing.esperado - ing.recibido) || undefined, descripcion: ingresosMes[0]?.descripcion, tipo_ingreso: ingresosMes[0]?.tipo })
+            }
+          />
+        )}
         <KpiCard
           i={1}
-          label={futuro ? 'Total estimado' : 'Total gastos'}
-          value={r.total}
+          label={futuro ? 'Total estimado' : 'Gastado'}
+          value={gastado}
           icon={Receipt}
           tone={usoIngreso > 90 ? 'bad' : usoIngreso > 75 ? 'warn' : 'default'}
           progress={usoIngreso}
-          hint={`${pctLabel(r.total, r.ingreso)} del ingreso`}
+          hint={[`${pctLabel(gastado, baseIngreso)} del ingreso`, flecha].filter(Boolean).join(' · ')}
         />
-        <KpiCard i={2} label={futuro ? 'Pagado por anticipado' : 'Pagado'} value={r.pagado} icon={CheckCircle2} tone="good" progress={ejecucion} hint={`${r.nPagados} de ${r.n} · ${pctLabel(r.pagado, r.presupuestado)} ejecutado`} />
+        <KpiCard
+          i={2}
+          label="Plan del mes"
+          value={plan.presupuestado}
+          icon={CalendarCheck}
+          tone="good"
+          progress={ejecucion}
+          hint={`${plan.nPagados} de ${plan.n} compromisos pagados`}
+        />
         <KpiCard
           i={3}
-          label={futuro ? 'Estimado a pagar' : estado === 'cerrado' || estado === 'pasado' ? 'Quedó sin pagar' : 'Por pagar'}
-          value={r.pendiente}
+          label={futuro ? 'Estimado a pagar' : estado === 'cerrado' || estado === 'pasado' ? 'Plan sin pagar' : 'Por pagar del plan'}
+          value={plan.pendiente}
           icon={ArrowDownRight}
           tone="warn"
-          hint={futuro ? `${r.nPendientes} pago(s) estimado(s)` : `${r.nPendientes} pago(s) pendiente(s)`}
+          hint={`${plan.nPendientes} compromiso(s) pendiente(s)`}
         />
         <KpiCard
           solid
           i={4}
-          label={futuro ? 'Disponible estimado' : 'Disponible'}
-          value={r.disponible}
+          label={futuro ? 'Disponible estimado' : 'Balance'}
+          value={futuro ? ing.esperado - gastado : balance}
           icon={PiggyBank}
-          tone={r.disponible < 0 ? 'bad' : 'good'}
-          hint={r.disponible < 0 ? 'Gastos superan el ingreso' : `${pctLabel(r.disponible, r.ingreso)} del ingreso libre`}
+          tone={(futuro ? ing.esperado - gastado : balance) < 0 ? 'bad' : 'good'}
+          hint={futuro ? 'Ingreso esperado − plan' : 'Ingresos recibidos − gastado'}
         />
         <KpiCard
           i={5}
@@ -268,7 +323,7 @@ export function DashboardPage() {
             })}
             {alertas.length > 7 && (
               <Button asChild variant="link" size="sm" className="px-0">
-                <Link to="/gastos">Ver los {alertas.length} pendientes</Link>
+                <Link to="/plan">Ver los {alertas.length} pendientes</Link>
               </Button>
             )}
           </CardContent>
@@ -280,7 +335,7 @@ export function DashboardPage() {
             <CardDescription>Valor y % del total de gastos</CardDescription>
           </CardHeader>
           <CardContent className="grid items-center gap-4 sm:grid-cols-[180px_1fr] lg:grid-cols-1 xl:grid-cols-[180px_1fr]">
-            <DonutCategorias data={cats} total={r.total} />
+            <DonutCategorias data={cats} total={gastado} />
             <ul className="min-w-0 space-y-2.5">
               {cats.map((c) => (
                 <li key={c.key} className="text-sm">
@@ -373,7 +428,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <MesAMes periodo={periodo} gastos={todosFiltrados} categorias={categorias} />
+      <MesAMes periodo={periodo} gastos={lineas} categorias={categorias} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="reveal">
@@ -384,45 +439,58 @@ export function DashboardPage() {
           <CardContent>
             <Gauge
               pct={usoIngreso}
-              label={`${money(r.total)} de ${money(r.ingreso)}`}
-              sub={r.disponible >= 0 ? `Quedan ${money(r.disponible)}` : `Excede en ${money(-r.disponible)}`}
+              label={`${money(gastado)} de ${money(baseIngreso)}`}
+              sub={baseIngreso - gastado >= 0 ? `Quedan ${money(baseIngreso - gastado)}` : `Excede en ${money(gastado - baseIngreso)}`}
             />
           </CardContent>
         </Card>
-        <Regla503020 gastos={filtrados} ingreso={r.ingreso} catPorId={catPorId} />
-        <PorResponsable gastos={filtrados} responsables={config.responsables} />
+        <Regla503020 gastos={lineasMes} ingreso={baseIngreso} catPorId={catPorId} />
+        <PorResponsable gastos={lineasMes} responsables={config.responsables} />
         <MetasResumen />
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CircleDollarSign className="size-4 text-primary" /> Ejecución por categoría
+            <Scale className="size-4 text-primary" /> Plan vs. real por categoría
           </CardTitle>
-          <CardDescription>Pagado frente a presupuestado</CardDescription>
+          <CardDescription>
+            {futuro ? 'Mes futuro: sólo hay plan' : 'Lo gastado (movimientos) frente a lo planeado (compromisos) · rojo = se pasó del plan'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {categorias
             .map((c) => {
-              const gs = filtrados.filter((g) => g.categoria_id === c.id && g.estado !== 'omitido')
-              const pres = gs.reduce((s, g) => s + Number(g.valor_presupuestado), 0)
-              const pag = gs.filter((g) => g.estado === 'pagado').reduce((s, g) => s + Number(g.valor_pagado ?? 0), 0)
-              return { c, pres, pag, n: gs.length }
+              const planCat = planFiltrado.filter((g) => g.categoria_id === c.id && g.estado !== 'omitido').reduce((s, g) => s + Number(g.valor_presupuestado), 0)
+              const real = futuro ? 0 : lineasMes.filter((g) => g.categoria_id === c.id).reduce((s, g) => s + valorGasto(g), 0)
+              return { c, planCat, real }
             })
-            .filter((x) => x.n > 0)
-            .map(({ c, pres, pag }) => (
-              <div key={c.id} className="rounded-xl border p-3">
-                <div className="flex items-center gap-2">
-                  <CategoryIcon icono={c.icono} color={c.color} size="sm" />
-                  <p className="truncate text-sm font-medium">{c.nombre}</p>
+            .filter((x) => x.planCat > 0 || x.real > 0)
+            .sort((a, b) => b.planCat + b.real - (a.planCat + a.real))
+            .map(({ c, planCat, real }) => {
+              const exceso = real > planCat
+              return (
+                <div key={c.id} className="rounded-xl border p-3">
+                  <div className="flex items-center gap-2">
+                    <CategoryIcon icono={c.icono} color={c.color} size="sm" />
+                    <p className="truncate text-sm font-medium">{c.nombre}</p>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground tabular-nums">
+                    {futuro ? `Plan ${money(planCat)}` : `${money(real)} de ${planCat ? money(planCat) : 'sin plan'}`}
+                  </p>
+                  <BarraCarga pct={planCat ? pct(real, planCat) : real ? 100 : 0} color={exceso ? '#e11d48' : c.color} className="mt-1.5" />
+                  <p className={cn('mt-1 text-right text-[11px] font-medium tabular-nums', exceso && 'text-rose-600 dark:text-rose-400')}>
+                    {futuro
+                      ? 'estimado'
+                      : !planCat
+                        ? 'fuera del plan'
+                        : exceso
+                          ? `+${money(real - planCat)} sobre el plan`
+                          : `quedan ${money(planCat - real)}`}
+                  </p>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground tabular-nums">
-                  {money(pag)} de {money(pres)}
-                </p>
-                <BarraCarga pct={pct(pag, pres)} color={c.color} className="mt-1.5" />
-                <p className="mt-1 text-right text-[11px] font-medium tabular-nums">{pctLabel(pag, pres, 0)}</p>
-              </div>
-            ))}
+              )
+            })}
         </CardContent>
       </Card>
       <IngresoForm ingreso={nuevoIngreso} onClose={() => setNuevoIngreso(null)} />

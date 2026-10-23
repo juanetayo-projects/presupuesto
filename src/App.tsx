@@ -11,6 +11,7 @@ import { DashboardPage } from '@/pages/dashboard'
 import { DeudasPage } from '@/pages/deudas'
 import { GastosPage } from '@/pages/gastos'
 import { HistoricoPage } from '@/pages/historico'
+import { MovimientosPage } from '@/pages/movimientos'
 import { LoginPage, NoAutorizadoPage, NuevaClavePage, SinConexionPage } from '@/pages/login'
 
 function Rutas() {
@@ -35,7 +36,9 @@ function Rutas() {
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />
-              <Route path="gastos" element={<GastosPage />} />
+              <Route path="movimientos" element={<MovimientosPage />} />
+              <Route path="plan" element={<GastosPage />} />
+              <Route path="gastos" element={<Navigate to="/plan" replace />} />
               <Route path="historico" element={<HistoricoPage />} />
               <Route path="deudas" element={<DeudasPage />} />
               <Route path="ajustes" element={<AjustesPage />} />

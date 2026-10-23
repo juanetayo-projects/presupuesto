@@ -39,7 +39,7 @@ export function PagoDialog({ gasto, onClose }: { gasto: Gasto | null; onClose: (
     setGuardando(true)
     try {
       await registrarPago(gasto, valor, fecha, pideAbono && abono ? abono : null, pagadoPor || null)
-      toast.success(`Pago registrado: ${gasto.descripcion}`)
+      toast.success(`Pago registrado: ${gasto.descripcion}`, { description: 'Quedó en Movimientos, en el mes de la fecha de pago.' })
       await recargar()
       onClose()
     } catch (e) {
@@ -67,6 +67,7 @@ export function PagoDialog({ gasto, onClose }: { gasto: Gasto | null; onClose: (
       }
     >
       <div className="grid gap-4 py-1">
+        <p className="text-xs text-muted-foreground">El pago se registra como movimiento real en el mes de la fecha de pago.</p>
         {futuro && gasto && (
           <p className="rounded-lg border border-violet-500/30 bg-violet-500/8 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
             Este valor es un <b>estimado</b> de {nombreMes(gasto.periodo)}. Al registrarlo como pagado pasa a ser un gasto realizado de ese mes.

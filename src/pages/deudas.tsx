@@ -22,6 +22,7 @@ import { useData } from '@/context/data'
 import { eliminarObligacion, guardarConcepto, guardarObligacion } from '@/lib/api'
 import { diasHasta, fechaCorta, fechaLarga, money, pct, proximaFechaDia } from '@/lib/format'
 import { TIPOS_OBLIGACION, type ObligacionVista, type TipoObligacion } from '@/lib/types'
+import { movComoGasto } from '@/lib/metrics'
 import { cn } from '@/lib/utils'
 
 export function DeudasPage() {
@@ -149,11 +150,12 @@ const COLOR_TIPO: Record<TipoObligacion, string> = {
 }
 
 function TarjetaObligacion({ o, onEdit }: { o: ObligacionVista; onEdit: () => void }) {
-  const { gastos } = useData()
+  const { movimientos } = useData()
   const [verPagos, setVerPagos] = useState(false)
+  // Historial de pagos reales (movimientos) de esta deuda, con o sin compromiso del plan
   const pagos = useMemo(
-    () => gastos.filter((g) => g.obligacion_id === o.id && g.estado === 'pagado').sort((a, b) => (b.fecha_pago ?? '').localeCompare(a.fecha_pago ?? '')),
-    [gastos, o.id],
+    () => movimientos.filter((m) => m.tipo === 'gasto' && m.obligacion_id === o.id).map(movComoGasto).sort((a, b) => (b.fecha_pago ?? '').localeCompare(a.fecha_pago ?? '')),
+    [movimientos, o.id],
   )
   const esCadena = o.tipo === 'cadena'
   const saldo = o.saldo_actual

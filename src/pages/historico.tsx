@@ -11,7 +11,7 @@ import { useCierreMes } from '@/components/estado-mes'
 import { CountUp, SlidingTabs, useCarga, useReducedMotion } from '@/components/motion'
 import { useData } from '@/context/data'
 import { mesCorto, money, moneyShort, nombreMes, periodoActual, periodoMas } from '@/lib/format'
-import { ETIQUETA_MES, valorHistorico } from '@/lib/metrics'
+import { ETIQUETA_MES, ingresoMes, lineasGasto, valorGasto } from '@/lib/metrics'
 import type { Categoria, EstadoMes } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -37,7 +37,7 @@ interface FilaCat {
  * realmente pagado (gasto realizado); en meses futuros, los valores estimados a pagar.
  */
 export function HistoricoPage() {
-  const { loading, periodo, setPeriodo, gastos, ingresos, categorias, estadoMes } = useData()
+  const { loading, periodo, setPeriodo, gastos, ingresos, movimientos, categorias, estadoMes } = useData()
   const { cerrar, reabrir, ocupado } = useCierreMes()
   const [rango, setRango] = useState<Rango>('6')
   const [modo, setModo] = useState<Modo>('real')
@@ -64,11 +64,18 @@ export function HistoricoPage() {
     const ceros = () => periodos.map(() => 0)
     const porCat = new Map<string, { valores: number[]; conceptos: Map<string, number[]> }>()
     const pendientes = ceros()
-    for (const g of gastos) {
+    // Realizado: movimientos en meses pasados/actual y plan en los futuros. Presupuestado: sólo el plan.
+    const lineas = modo === 'real' ? lineasGasto(gastos, movimientos, estadoMes) : gastos.filter((g) => g.estado !== 'omitido')
+    if (modo === 'real') {
+      for (const g of gastos) {
+        const i = idx.get(g.periodo)
+        if (i !== undefined && estados[i] !== 'futuro' && g.estado === 'pendiente') pendientes[i] += Number(g.valor_presupuestado)
+      }
+    }
+    for (const g of lineas) {
       const i = idx.get(g.periodo)
-      if (i === undefined || g.estado === 'omitido') continue
-      const v = valorHistorico(g, estados[i], modo)
-      if (modo === 'real' && estados[i] !== 'futuro' && g.estado === 'pendiente') pendientes[i] += Number(g.valor_presupuestado)
+      if (i === undefined) continue
+      const v = modo === 'real' ? valorGasto(g) : Number(g.valor_presupuestado)
       if (!porCat.has(g.categoria_id)) porCat.set(g.categoria_id, { valores: ceros(), conceptos: new Map() })
       const x = porCat.get(g.categoria_id)!
       x.valores[i] += v
@@ -90,9 +97,12 @@ export function HistoricoPage() {
         }
       })
     const totales = periodos.map((_, i) => filas.reduce((s, f) => s + f.valores[i], 0))
-    const ingreso = periodos.map((p) => ingresos.filter((x) => x.periodo === p).reduce((s, x) => s + Number(x.valor), 0))
+    const ingreso = periodos.map((p, i) => {
+      const x = ingresoMes(p, estados[i], movimientos, ingresos)
+      return modo === 'real' ? x.valor : x.esperado
+    })
     return { filas, totales, ingreso, pendientes }
-  }, [gastos, ingresos, categorias, periodos, estados, modo])
+  }, [gastos, ingresos, movimientos, categorias, periodos, estados, modo, estadoMes])
 
   // Meses transcurridos con datos (un mes vacío no baja el promedio)
   const iReal = estados.map((e, i) => (e !== 'futuro' && datos.totales[i] > 0 ? i : -1)).filter((i) => i >= 0)
@@ -126,7 +136,7 @@ export function HistoricoPage() {
         ...filas,
         [],
         ['Total', ...datos.totales, datos.totales.reduce((a, b) => a + b, 0)],
-        ['Ingreso', ...datos.ingreso, datos.ingreso.reduce((a, b) => a + b, 0)],
+        [modo === 'real' ? 'Ingresos recibidos' : 'Ingreso esperado', ...datos.ingreso, datos.ingreso.reduce((a, b) => a + b, 0)],
         ['Disponible', ...datos.ingreso.map((v, i) => v - datos.totales[i])],
         ['Estado del mes', ...estados.map((e) => ETIQUETA_MES[e])],
       ])
@@ -147,7 +157,7 @@ export function HistoricoPage() {
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Histórico mes a mes</h2>
           <p className="text-sm text-muted-foreground">
-            {modo === 'real' ? 'Lo realmente pagado en cada mes. Los meses futuros muestran lo estimado a pagar.' : 'Lo presupuestado en cada mes.'}
+            {modo === 'real' ? 'Lo realmente pagado en cada mes (Movimientos). Los meses futuros muestran el plan: estimado a pagar.' : 'Lo planeado en cada mes (compromisos del plan).'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -156,7 +166,7 @@ export function HistoricoPage() {
             onChange={setModo}
             options={[
               { value: 'real', label: 'Realizado' },
-              { value: 'presupuesto', label: 'Presupuestado' },
+              { value: 'presupuesto', label: 'Plan' },
             ]}
           />
           <SlidingTabs
@@ -190,7 +200,7 @@ export function HistoricoPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Resumen i={0} label={modo === 'real' ? 'Gastado en el periodo' : 'Presupuestado'} valor={totalReal} hint={`${iReal.length} mes(es) transcurridos`} />
+        <Resumen i={0} label={modo === 'real' ? 'Gastado en el periodo' : 'Planeado'} valor={totalReal} hint={`${iReal.length} mes(es) transcurridos`} />
         <Resumen i={1} label="Promedio mensual" valor={promedio} hint="Meses pasados y el actual" />
         <Resumen i={2} label="Estimado a pagar" valor={totalEstimado} hint="Meses futuros" estimado />
         <Resumen
@@ -206,7 +216,7 @@ export function HistoricoPage() {
       <Card className="reveal gap-0 py-0" style={{ '--i': 2 } as React.CSSProperties}>
         <CardHeader className="py-4">
           <CardTitle>Tabla de gastos por mes</CardTitle>
-          <CardDescription>Toca una categoría para ver sus conceptos · toca un mes para abrirlo en Inicio y Gastos</CardDescription>
+          <CardDescription>Toca una categoría para ver sus conceptos · toca un mes para abrirlo en Inicio, Movimientos y Plan</CardDescription>
         </CardHeader>
         <div className="overflow-x-auto border-t">
           <table className="w-full min-w-max border-separate border-spacing-0 text-sm">
@@ -295,7 +305,7 @@ export function HistoricoPage() {
             {datos.filas.length > 0 && (
               <tfoot className="font-semibold">
                 <FilaPie label={modo === 'real' ? 'Total gastado / estimado' : 'Total presupuestado'} valores={datos.totales} estados={estados} periodos={periodos} periodo={periodo} fuerte />
-                <FilaPie label="Ingreso" valores={datos.ingreso} estados={estados} periodos={periodos} periodo={periodo} />
+                <FilaPie label={modo === 'real' ? 'Ingresos recibidos' : 'Ingreso esperado'} valores={datos.ingreso} estados={estados} periodos={periodos} periodo={periodo} />
                 <FilaPie
                   label="Disponible"
                   valores={datos.ingreso.map((v, i) => v - datos.totales[i])}
@@ -305,7 +315,7 @@ export function HistoricoPage() {
                   colorear
                 />
                 {modo === 'real' && datos.pendientes.some(Boolean) && (
-                  <FilaPie label="Pendiente sin pagar" valores={datos.pendientes} estados={estados} periodos={periodos} periodo={periodo} tenue />
+                  <FilaPie label="Plan sin pagar" valores={datos.pendientes} estados={estados} periodos={periodos} periodo={periodo} tenue />
                 )}
               </tfoot>
             )}

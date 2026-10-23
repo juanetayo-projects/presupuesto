@@ -101,7 +101,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
 
   async function guardar() {
     if (cerrado) return toast.error('El mes está cerrado', { description: 'Reábrelo desde Inicio o Histórico para modificarlo.' })
-    if (!descripcion.trim()) return toast.error('Escribe el concepto del gasto')
+    if (!descripcion.trim()) return toast.error('Escribe el concepto del compromiso')
     if (!categoriaId) return toast.error('Elige una categoría')
     if (valor <= 0) return toast.error('El valor debe ser mayor a cero')
     setGuardando(true)
@@ -127,14 +127,14 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
       }
       if (gasto) {
         await actualizarGasto(gasto.id, base)
-        toast.success('Gasto actualizado')
+        toast.success('Compromiso actualizado')
       } else {
         await crearGasto(
           { ...base, estado: 'pendiente', valor_pagado: null, fecha_pago: null, abono_capital: null, pagado_por: null },
           dividir ? cuotas : 1,
           modo,
         )
-        toast.success(dividir ? `Gasto dividido en ${cuotas} cuotas` : 'Gasto agregado')
+        toast.success(dividir ? `Compromiso dividido en ${cuotas} cuotas` : 'Compromiso agregado al plan')
       }
       if (obligacionId === NUEVA_DEUDA) toast.success(`Deuda "${descripcion.trim()}" creada. Registra su saldo en Deudas.`)
       await recargar()
@@ -165,7 +165,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       ancho="lg"
-      title={editando ? 'Editar gasto' : 'Nuevo gasto'}
+      title={editando ? 'Editar compromiso del plan' : 'Nuevo compromiso del plan'}
       description={editando && gasto?.cuotas_total ? `Cuota ${gasto.cuota_num} de ${gasto.cuotas_total}` : undefined}
       footerStart={
         editando && !cerrado && (
@@ -225,7 +225,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
         <Campo label="Concepto" htmlFor="g-desc" className={editando ? 'col-span-2' : 'col-span-2'}>
           <Input id="g-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej. NU Juank, SOAT, matrícula…" />
         </Campo>
-        <Campo label="¿De quién es el gasto?" className={editando ? 'col-span-2 sm:col-span-1' : 'col-span-2 sm:col-span-3'}>
+        <Campo label="¿De quién es?" className={editando ? 'col-span-2 sm:col-span-1' : 'col-span-2 sm:col-span-3'}>
           <ToggleGroup type="single" variant="outline" size="sm" value={responsable} onValueChange={(v) => v && setResponsable(v)} className="h-8 w-full">
             {config.responsables.map((r) => (
               <ToggleGroupItem key={r} value={r} className="h-8 flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">

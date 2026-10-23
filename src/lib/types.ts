@@ -144,3 +144,29 @@ export interface CierreMes {
  * - futuro: lo registrado son valores estimados a pagar, no gastos.
  */
 export type EstadoMes = 'cerrado' | 'pasado' | 'actual' | 'futuro'
+
+/**
+ * Lo REAL: un gasto que se pagó o un ingreso que se recibió. Su mes (`periodo`) sale de la fecha.
+ * Si paga un compromiso del plan, `gasto_id` lo enlaza (el compromiso queda "pagado" automáticamente).
+ */
+export interface Movimiento {
+  id: string
+  tipo: 'gasto' | 'ingreso'
+  fecha: string
+  periodo: string
+  valor: number
+  categoria_id: string | null
+  descripcion: string
+  medio_pago: string | null
+  responsable: string
+  gasto_id: string | null
+  obligacion_id: string | null
+  abono_capital: number | null
+  tipo_ingreso: string | null
+  pagado_por: string | null
+  notas: string | null
+  creado_por: string | null
+  creado_en: string
+}
+
+export type MovimientoInput = Omit<Movimiento, 'id' | 'periodo' | 'creado_por' | 'creado_en'>

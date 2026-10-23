@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { fechaEnPeriodo, periodoMas } from './format'
-import type { CierreMes, Concepto, Gasto, Ingreso, Meta, Obligacion } from './types'
+import type { CierreMes, Concepto, Gasto, Ingreso, Meta, Movimiento, MovimientoInput, Obligacion } from './types'
 
 function check<T>({ data, error }: { data: T; error: { message: string } | null }) {
   if (error) throw new Error(error.message)
@@ -20,7 +20,7 @@ export async function cargarTodo() {
 }
 
 async function cargarReal() {
-  const [categorias, conceptos, obligaciones, gastos, ingresos, config, miembros, metas, cierres] = await Promise.all([
+  const [categorias, conceptos, obligaciones, gastos, ingresos, config, miembros, metas, cierres, movimientos] = await Promise.all([
     supabase.from('categorias').select('*').order('orden'),
     supabase.from('conceptos').select('*').order('orden'),
     supabase.from('v_obligaciones').select('*').order('nombre'),
@@ -30,6 +30,7 @@ async function cargarReal() {
     supabase.from('miembros').select('email,nombre').order('nombre'),
     supabase.from('metas').select('*').order('creado_en'),
     supabase.from('cierres_mes').select('*').order('periodo'),
+    supabase.from('movimientos').select('*').order('fecha', { ascending: false }).order('creado_en', { ascending: false }),
   ])
   const cfg: Record<string, unknown> = {}
   for (const r of check(config) ?? []) cfg[r.clave] = r.valor
@@ -48,6 +49,7 @@ async function cargarReal() {
     miembros: check(miembros) ?? [],
     metas: (check(metas) ?? []) as Meta[],
     cierres: (check(cierres) ?? []) as CierreMes[],
+    movimientos: (check(movimientos) ?? []) as Movimiento[],
   }
 }
 
@@ -128,12 +130,44 @@ export async function eliminarGasto(g: Gasto, todoElGrupo: boolean) {
   }
 }
 
+/**
+ * Pagar un compromiso del plan = registrar su movimiento real (en el mes de la fecha de pago).
+ * La base marca el compromiso como pagado (trigger sincronizar_compromiso).
+ */
 export async function registrarPago(g: Gasto, valor: number, fecha: string, abono: number | null, pagadoPor: string | null) {
-  await actualizarGasto(g.id, { estado: 'pagado', valor_pagado: valor, fecha_pago: fecha, abono_capital: abono, pagado_por: pagadoPor })
+  check(
+    await supabase.from('movimientos').insert({
+      tipo: 'gasto',
+      fecha,
+      valor,
+      categoria_id: g.categoria_id,
+      descripcion: g.descripcion,
+      medio_pago: g.medio_pago,
+      responsable: g.responsable,
+      gasto_id: g.id,
+      obligacion_id: g.obligacion_id,
+      abono_capital: abono,
+      pagado_por: pagadoPor,
+    }),
+  )
 }
 
+/** Deshace el pago: borra su movimiento y el compromiso vuelve a pendiente. */
 export async function deshacerPago(g: Gasto) {
-  await actualizarGasto(g.id, { estado: 'pendiente', valor_pagado: null, fecha_pago: null, abono_capital: null, pagado_por: null })
+  const { data } = await supabase.from('movimientos').select('id').eq('gasto_id', g.id)
+  if (data?.length) check(await supabase.from('movimientos').delete().eq('gasto_id', g.id))
+  // Compromisos pagados antes de existir los movimientos
+  else await actualizarGasto(g.id, { estado: 'pendiente', valor_pagado: null, fecha_pago: null, abono_capital: null, pagado_por: null })
+}
+
+export async function guardarMovimiento(m: Partial<MovimientoInput> & { id?: string }) {
+  const { id, ...rest } = m
+  if (id) check(await supabase.from('movimientos').update(rest).eq('id', id).select())
+  else check(await supabase.from('movimientos').insert(rest))
+}
+
+export async function eliminarMovimiento(id: string) {
+  check(await supabase.from('movimientos').delete().eq('id', id))
 }
 
 export async function guardarObligacion(o: Partial<Obligacion> & { nombre: string }) {

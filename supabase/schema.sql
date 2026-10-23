@@ -193,3 +193,107 @@ create trigger gastos_mes_abierto before insert or update or delete on public.ga
   for each row execute function public.validar_mes_abierto();
 create trigger ingresos_mes_abierto before insert or update or delete on public.ingresos
   for each row execute function public.validar_mes_abierto();
+
+-- ── Movimientos: lo REAL (gastos pagados e ingresos recibidos); el mes sale de la fecha ─────────
+-- La tabla gastos es el PLAN del mes (compromisos). Pagar un compromiso = crear su movimiento.
+create table public.movimientos (
+  id uuid primary key default gen_random_uuid(),
+  tipo text not null check (tipo in ('gasto','ingreso')),
+  fecha date not null default current_date,
+  periodo date generated always as (date_trunc('month', fecha::timestamp)::date) stored,
+  valor numeric(14,0) not null check (valor > 0),
+  categoria_id uuid references public.categorias(id),
+  descripcion text not null,
+  medio_pago text,
+  responsable text not null default 'Familiar',
+  gasto_id uuid references public.gastos(id) on delete set null,   -- compromiso del plan que paga
+  obligacion_id uuid references public.obligaciones(id) on delete set null,
+  abono_capital numeric(14,0),
+  tipo_ingreso text,
+  pagado_por text,
+  notas text,
+  creado_por text default (auth.jwt() ->> 'email'),
+  creado_en timestamptz not null default now(),
+  constraint movimientos_gasto_con_categoria check (tipo = 'ingreso' or categoria_id is not null)
+);
+create index on public.movimientos(periodo);
+create index on public.movimientos(obligacion_id);
+create unique index movimientos_un_pago_por_compromiso on public.movimientos(gasto_id) where gasto_id is not null;
+alter table public.movimientos enable row level security;
+create policy movimientos_sel on public.movimientos for select to authenticated using (public.es_miembro());
+create policy movimientos_ins on public.movimientos for insert to authenticated with check (public.es_miembro());
+create policy movimientos_upd on public.movimientos for update to authenticated using (public.es_miembro()) with check (public.es_miembro());
+create policy movimientos_del on public.movimientos for delete to authenticated using (public.es_miembro());
+
+-- validar_mes_abierto (reemplaza la versión anterior): también cubre movimientos (mes = mes de la fecha)
+create or replace function public.validar_mes_abierto()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  cerrado date;
+  p_old date;
+  p_new date;
+  libres text[] := array['concepto_id','obligacion_id','gasto_id'];
+begin
+  if tg_op = 'UPDATE' and (to_jsonb(new) - libres) = (to_jsonb(old) - libres) then
+    return new;
+  end if;
+  if tg_table_name = 'movimientos' then
+    if tg_op <> 'INSERT' then p_old := date_trunc('month', old.fecha::timestamp)::date; end if;
+    if tg_op <> 'DELETE' then p_new := date_trunc('month', new.fecha::timestamp)::date; end if;
+  else
+    if tg_op <> 'INSERT' then p_old := (to_jsonb(old) ->> 'periodo')::date; end if;
+    if tg_op <> 'DELETE' then p_new := (to_jsonb(new) ->> 'periodo')::date; end if;
+  end if;
+  select c.periodo into cerrado from public.cierres_mes c where c.periodo in (p_old, p_new) limit 1;
+  if cerrado is not null then
+    raise exception 'El mes % está cerrado. Reábrelo para modificarlo.', to_char(cerrado, 'MM/YYYY') using errcode = 'P0001';
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $$;
+create trigger movimientos_mes_abierto before insert or update or delete on public.movimientos
+  for each row execute function public.validar_mes_abierto();
+
+-- El compromiso del plan refleja su pago: estado, valor y fecha salen del movimiento.
+create or replace function public.sincronizar_compromiso()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if tg_op in ('UPDATE','DELETE') and old.gasto_id is not null
+     and (tg_op = 'DELETE' or new.gasto_id is distinct from old.gasto_id) then
+    update public.gastos set estado = 'pendiente', valor_pagado = null, fecha_pago = null, abono_capital = null, pagado_por = null
+     where id = old.gasto_id;
+  end if;
+  if tg_op in ('INSERT','UPDATE') and new.gasto_id is not null then
+    update public.gastos set estado = 'pagado', valor_pagado = new.valor, fecha_pago = new.fecha,
+           abono_capital = new.abono_capital, pagado_por = new.pagado_por
+     where id = new.gasto_id
+       and (estado, valor_pagado, fecha_pago, abono_capital, pagado_por) is distinct from ('pagado', new.valor, new.fecha, new.abono_capital, new.pagado_por);
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $$;
+create trigger movimientos_sincronizar after insert or update or delete on public.movimientos
+  for each row execute function public.sincronizar_compromiso();
+
+-- v_obligaciones (reemplaza la anterior): saldo a partir de los movimientos reales
+create or replace view public.v_obligaciones with (security_invoker = true) as
+select o.*,
+  coalesce(p.pagado, 0) as total_pagado,
+  coalesce(p.abonos, 0) as total_abonos,
+  coalesce(p.cuotas_pagadas, 0) as cuotas_pagadas,
+  p.ultimo_pago,
+  case when o.tipo = 'cadena' then coalesce(o.saldo_inicial,0) + coalesce(p.pagado,0)
+       when o.saldo_inicial is null then null
+       else greatest(o.saldo_inicial - coalesce(p.abonos,0), 0) end as saldo_actual
+from public.obligaciones o
+left join (
+  select m.obligacion_id,
+    sum(m.valor) as pagado,
+    sum(coalesce(m.abono_capital, m.valor)) as abonos,
+    count(*) as cuotas_pagadas,
+    max(m.fecha) as ultimo_pago
+  from public.movimientos m
+  join public.obligaciones x on x.id = m.obligacion_id
+  where m.tipo = 'gasto' and m.fecha >= coalesce(x.fecha_saldo, '1900-01-01')
+  group by m.obligacion_id
+) p on p.obligacion_id = o.id;

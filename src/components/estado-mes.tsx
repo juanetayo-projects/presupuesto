@@ -5,26 +5,32 @@ import { Button } from '@/components/ui/button'
 import { useData } from '@/context/data'
 import { cerrarMes, reabrirMes } from '@/lib/api'
 import { fechaCorta, nombreMes } from '@/lib/format'
-import { resumen, valorGasto } from '@/lib/metrics'
+import { resumen } from '@/lib/metrics'
 import { cn } from '@/lib/utils'
 
 /** Cerrar / reabrir un mes. Al cerrar se guarda la foto de sus totales y la base bloquea los cambios. */
 export function useCierreMes() {
-  const { gastos, ingresos, recargar } = useData()
+  const { gastos, ingresos, movimientos, recargar } = useData()
   const [ocupado, setOcupado] = useState(false)
 
   async function cerrar(periodo: string) {
-    const gs = gastos.filter((g) => g.periodo === periodo)
-    const r = resumen(gs, ingresos.filter((i) => i.periodo === periodo))
+    const r = resumen(
+      gastos.filter((g) => g.periodo === periodo),
+      ingresos.filter((i) => i.periodo === periodo),
+    )
+    const movs = movimientos.filter((m) => m.periodo === periodo)
+    const gastado = movs.filter((m) => m.tipo === 'gasto').reduce((s, m) => s + Number(m.valor), 0)
+    const recibido = movs.filter((m) => m.tipo === 'ingreso').reduce((s, m) => s + Number(m.valor), 0)
     const msg =
-      `¿Cerrar ${nombreMes(periodo)}?\n\nSus gastos e ingresos quedan congelados: no se podrán editar, pagar ni borrar hasta reabrirlo.` +
-      (r.nPendientes ? `\n\nQuedan ${r.nPendientes} pago(s) pendientes que se guardarán como no pagados.` : '')
+      `¿Cerrar ${nombreMes(periodo)}?\n\nSus movimientos y su plan quedan congelados: no se podrán registrar, editar, pagar ni borrar hasta reabrirlo.` +
+      (r.nPendientes ? `\n\nQuedan ${r.nPendientes} compromiso(s) del plan sin pagar; quedarán así.` : '')
     if (!window.confirm(msg)) return
     setOcupado(true)
     try {
       const categorias: Record<string, number> = {}
-      for (const g of gs) if (g.estado === 'pagado') categorias[g.categoria_id] = (categorias[g.categoria_id] ?? 0) + valorGasto(g)
-      await cerrarMes(periodo, { ingreso: r.ingreso, total: r.total, pagado: r.pagado, pendiente: r.pendiente, categorias })
+      for (const m of movs) if (m.tipo === 'gasto' && m.categoria_id) categorias[m.categoria_id] = (categorias[m.categoria_id] ?? 0) + Number(m.valor)
+      // Foto del mes: lo real (gastado / recibido) y lo que quedó pendiente del plan
+      await cerrarMes(periodo, { ingreso: recibido, total: gastado, pagado: gastado, pendiente: r.pendiente, categorias })
       toast.success(`${nombreMes(periodo)} cerrado`, { description: 'Sus valores ya no cambiarán.' })
       await recargar()
     } catch (e) {

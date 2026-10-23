@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTheme } from 'next-themes'
-import { CalendarRange, Home, Landmark, ListChecks, LogOut, Moon, Plus, Settings, Sun, Wallet } from 'lucide-react'
+import { ArrowLeftRight, CalendarRange, Home, Landmark, ListChecks, LogOut, Moon, Plus, Settings, Sun, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MonthSwitcher } from '@/components/month-switcher'
@@ -14,7 +14,8 @@ export const APP_TITLE = 'Presupuesto familia Etayo-Murillo'
 
 const NAV = [
   { to: '/', label: 'Inicio', icon: Home, end: true },
-  { to: '/gastos', label: 'Gastos', icon: ListChecks },
+  { to: '/movimientos', label: 'Movimientos', icon: ArrowLeftRight },
+  { to: '/plan', label: 'Plan', icon: ListChecks },
   { to: '/historico', label: 'Histórico', icon: CalendarRange },
   { to: '/deudas', label: 'Deudas', icon: Landmark },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
@@ -22,7 +23,7 @@ const NAV = [
 
 export function AppShell() {
   const { session } = useAuth()
-  const { abrirGasto } = useUi()
+  const { abrirMovimiento } = useUi()
   const { resolvedTheme, setTheme } = useTheme()
   const { vencidos } = useAlertasNavegador()
   const email = session?.user.email ?? ''
@@ -55,14 +56,14 @@ export function AppShell() {
             >
               <n.icon className="size-4" />
               {n.label}
-              {n.to === '/gastos' && vencidos > 0 && (
+              {n.to === '/plan' && vencidos > 0 && (
                 <span className="ml-auto rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">{vencidos}</span>
               )}
             </NavLink>
           ))}
         </nav>
-        <Button className="mt-6 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90" onClick={() => abrirGasto()}>
-          <Plus /> Nuevo gasto
+        <Button className="mt-6 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90" onClick={() => abrirMovimiento()}>
+          <Plus /> Registrar movimiento
         </Button>
         <button
           onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
@@ -131,21 +132,21 @@ export function AppShell() {
 
       {/* Navegación inferior (celular) */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden">
-        <div className="relative mx-auto grid h-16 max-w-md grid-cols-6 items-center">
+        <div className="relative mx-auto grid h-16 max-w-md grid-cols-7 items-center">
           {NAV.slice(0, 2).map((n) => (
-            <BottomItem key={n.to} {...n} badge={n.to === '/gastos' ? vencidos : 0} />
+            <BottomItem key={n.to} {...n} />
           ))}
           <div className="flex justify-center">
             <button
-              onClick={() => abrirGasto()}
-              aria-label="Nuevo gasto"
+              onClick={() => abrirMovimiento()}
+              aria-label="Registrar movimiento"
               className="-mt-7 grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg ring-4 shadow-primary/30 ring-background transition active:scale-95"
             >
               <Plus className="size-6" />
             </button>
           </div>
           {NAV.slice(2).map((n) => (
-            <BottomItem key={n.to} {...n} />
+            <BottomItem key={n.to} {...n} badge={n.to === '/plan' ? vencidos : 0} />
           ))}
         </div>
       </nav>
@@ -159,7 +160,7 @@ function BottomItem({ to, label, icon: Icon, end, badge = 0 }: (typeof NAV)[numb
       to={to}
       end={end}
       className={({ isActive }) =>
-        cn('relative flex flex-col items-center gap-0.5 text-[11px] font-medium text-muted-foreground', isActive && 'text-primary')
+        cn('relative flex min-w-0 flex-col items-center gap-0.5 truncate text-[10px] font-medium text-muted-foreground', isActive && 'text-primary')
       }
     >
       <Icon className="size-5" />
