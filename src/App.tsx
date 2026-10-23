@@ -11,11 +11,12 @@ import { DashboardPage } from '@/pages/dashboard'
 import { DeudasPage } from '@/pages/deudas'
 import { GastosPage } from '@/pages/gastos'
 import { HistoricoPage } from '@/pages/historico'
-import { LoginPage, NoAutorizadoPage, NuevaClavePage } from '@/pages/login'
+import { LoginPage, NoAutorizadoPage, NuevaClavePage, SinConexionPage } from '@/pages/login'
 
 function Rutas() {
-  const { session, loading, esMiembro, recuperando } = useAuth()
+  const { session, loading, esMiembro, recuperando, sinConexion } = useAuth()
 
+  if (sinConexion) return <SinConexionPage />
   if (loading || (session && esMiembro === null)) {
     return (
       <div className="grid min-h-dvh place-items-center">

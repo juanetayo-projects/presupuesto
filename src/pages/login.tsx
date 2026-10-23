@@ -158,6 +158,24 @@ export function NoAutorizadoPage() {
   )
 }
 
+export function SinConexionPage() {
+  return (
+    <Fondo>
+      <Card className="w-full max-w-sm text-center">
+        <CardHeader>
+          <CardTitle>No hay respuesta del servidor</CardTitle>
+          <CardDescription>
+            Supabase (donde viven los datos) no respondió a tiempo. Revisa tu conexión a internet e intenta de nuevo en unos minutos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => window.location.reload()}>Reintentar</Button>
+        </CardContent>
+      </Card>
+    </Fondo>
+  )
+}
+
 function Fondo({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative grid min-h-dvh place-items-center overflow-hidden bg-background p-4">

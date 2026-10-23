@@ -9,6 +9,13 @@ interface AuthState {
   esMiembro: boolean | null
   recuperando: boolean
   setRecuperando: (v: boolean) => void
+  /** Supabase no respondió al validar la sesión. */
+  sinConexion: boolean
+}
+
+/** Rechaza si la promesa tarda más de `ms` (p. ej. una renovación de sesión que nunca responde). */
+function conLimite<T>(p: PromiseLike<T>, ms = 25000) {
+  return Promise.race([Promise.resolve(p), new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Tiempo de espera agotado')), ms))])
 }
 
 const Ctx = createContext<AuthState>(null!)
@@ -18,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [esMiembro, setEsMiembro] = useState<boolean | null>(null)
   const [recuperando, setRecuperando] = useState(false)
+  const [sinConexion, setSinConexion] = useState(false)
 
   useEffect(() => {
     if (esDemo) {
@@ -26,10 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
-    })
+    conLimite(supabase.auth.getSession())
+      .then(({ data }) => setSession(data.session))
+      .catch(() => setSinConexion(true))
+      .finally(() => setLoading(false))
     const { data } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s)
       if (event === 'PASSWORD_RECOVERY') setRecuperando(true)
@@ -43,11 +51,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEsMiembro(null)
       return
     }
-    supabase.rpc('es_miembro').then(({ data }) => setEsMiembro(Boolean(data)))
+    conLimite(supabase.rpc('es_miembro'))
+      .then(({ data, error }) => {
+        // Sin código = la petición no llegó (red o tiempo agotado); con código es una respuesta del servidor
+        if (error && !error.code) throw error
+        setEsMiembro(Boolean(data))
+      })
+      .catch(() => setSinConexion(true))
   }, [session?.user.id])
 
   return (
-    <Ctx.Provider value={{ session, loading, esMiembro, recuperando, setRecuperando }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ session, loading, esMiembro, recuperando, setRecuperando, sinConexion }}>{children}</Ctx.Provider>
   )
 }
 
