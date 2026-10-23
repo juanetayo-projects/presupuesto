@@ -92,8 +92,21 @@ function Ingresos() {
 }
 
 function Plantilla() {
-  const { conceptos, categorias, recargar } = useData()
+  const { conceptos, categorias, gastos, movimientos, recargar } = useData()
   const [editando, setEditando] = useState<Partial<Concepto> | null>(null)
+  // Una categoría se puede borrar sólo si nada la usa: ni ítems (activos o no), ni compromisos, ni movimientos
+  const vacia = (id: string) => !conceptos.some((c) => c.categoria_id === id) && !gastos.some((g) => g.categoria_id === id) && !movimientos.some((m) => m.categoria_id === id)
+
+  async function borrarCategoria(id: string, nombre: string) {
+    if (!window.confirm(`¿Eliminar la categoría "${nombre}"? Está vacía, no se pierde ningún dato.`)) return
+    try {
+      await eliminarCategoria(id)
+      toast.success('Categoría eliminada', { description: nombre })
+      await recargar()
+    } catch (e) {
+      toast.error('No se pudo eliminar', { description: (e as Error).message })
+    }
+  }
   const [nuevaCat, setNuevaCat] = useState('')
   const [verInactivos, setVerInactivos] = useState(false)
   const visibles = conceptos.filter((c) => verInactivos || c.activo)
@@ -146,6 +159,18 @@ function Plantilla() {
               >
                 <Plus /> Ítem
               </Button>
+              {vacia(cat.id) && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Eliminar la categoría ${cat.nombre}`}
+                  title="Eliminar categoría vacía"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => borrarCategoria(cat.id, cat.nombre)}
+                >
+                  <Trash2 />
+                </Button>
+              )}
             </div>
             <div className="px-2">
               {items.length === 0 && <p className="px-2 py-1 text-xs text-muted-foreground">Sin ítems todavía.</p>}
