@@ -15,6 +15,7 @@ import { FilterBar } from '@/components/filter-bar'
 import { IngresoForm } from '@/components/ingresos'
 import { KpiCard } from '@/components/kpi-card'
 import { EstadoMesBanner } from '@/components/estado-mes'
+import { ClonarPlanDialog } from '@/components/clonar-plan'
 import { BarraCarga, Gauge, useReducedMotion } from '@/components/motion'
 import { MesAMes } from '@/components/mes-a-mes'
 import { MetasResumen } from '@/components/metas'
@@ -23,7 +24,7 @@ import { Regla503020 } from '@/components/regla-503020'
 import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
 import { useAlertasNavegador } from '@/hooks/use-alertas'
-import { copiarMesAnterior, generarMes } from '@/lib/api'
+import { generarMes } from '@/lib/api'
 import { exportarMesExcel } from '@/lib/export'
 import { diasHasta, fechaCorta, mesCorto, money, moneyShort, nombreMes, pct, pctLabel, periodoMas } from '@/lib/format'
 import { aplicarFiltros, deudaAlMes, ingresoMes, lineasGasto, porCategoria, porConcepto, resumen, valorGasto, type Porcion } from '@/lib/metrics'
@@ -39,6 +40,7 @@ export function DashboardPage() {
   const { pagar, abrirMovimiento } = useUi()
   const { alertas, cortes } = useAlertasNavegador()
   const [generando, setGenerando] = useState(false)
+  const [clonando, setClonando] = useState(false)
   const [nuevoIngreso, setNuevoIngreso] = useState<Partial<Ingreso> | null>(null)
 
   // PLAN: compromisos del mes
@@ -103,20 +105,6 @@ export function DashboardPage() {
     }
   }
 
-  const gastosAnt = gastos.filter((g) => g.periodo === anterior)
-
-  async function copiar() {
-    setGenerando(true)
-    try {
-      const n = await copiarMesAnterior(periodo, gastosAnt, ingresos.filter((i) => i.periodo === anterior), ingresosMes, conceptos)
-      toast.success(`Se copiaron ${n} compromisos de ${nombreMes(anterior)}`)
-      await recargar()
-    } catch (e) {
-      toast.error('No se pudo copiar', { description: (e as Error).message })
-    } finally {
-      setGenerando(false)
-    }
-  }
 
   if (loading) return <DashboardSkeleton />
 
@@ -143,13 +131,14 @@ export function DashboardPage() {
                 <Plus /> Registrar un movimiento
               </Button>
             )}
-            {gastosAnt.length > 0 && (
-              <Button variant="outline" onClick={copiar} disabled={generando} className="w-full">
-                <Copy /> Copiar valores de {nombreMes(anterior)}
+            {gastos.some((g) => g.periodo < periodo) && (
+              <Button variant="outline" onClick={() => setClonando(true)} disabled={generando} className="w-full">
+                <Copy /> Clonar el plan de otro mes
               </Button>
             )}
           </div>
         </CardContent>
+        <ClonarPlanDialog open={clonando} onClose={() => setClonando(false)} destinoInicial={periodo} />
       </Card>
     )
   }

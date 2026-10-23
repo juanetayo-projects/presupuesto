@@ -1,6 +1,6 @@
 import { diasHasta } from './format'
 import type { Filtros } from '@/context/data'
-import type { Categoria, EstadoMes, Gasto, Ingreso, Movimiento, ObligacionVista } from './types'
+import type { Categoria, Concepto, EstadoMes, Gasto, Ingreso, Movimiento, ObligacionVista } from './types'
 
 export type Urgencia = 'pagado' | 'vencido' | 'hoy' | 'pronto' | 'normal' | 'sin_fecha'
 
@@ -175,6 +175,8 @@ export function movComoGasto(m: Movimiento): Gasto {
     notas: m.notas,
     pagado_por: m.pagado_por,
     responsable: m.responsable,
+    clase_gasto: m.obligacion_id ? 'credito' : 'variable',
+    arrastre: null,
   }
 }
 
@@ -200,4 +202,48 @@ export const ETIQUETA_MES: Record<EstadoMes, string> = {
   pasado: 'Sin cerrar',
   actual: 'En curso',
   futuro: 'Estimado',
+}
+
+export interface OpcionesClonar {
+  credito: boolean
+  fijo: boolean
+  variable: boolean
+  /** Créditos: sumar lo que quedó sin pagar en el mes origen. */
+  arrastrar: boolean
+  ingresos: boolean
+}
+
+export interface FilaClon {
+  origen: Gasto
+  base: number
+  arrastre: number
+  valor: number
+}
+
+/**
+ * Vista previa de clonar el plan de `origen` a `destino`:
+ * - Crédito: valor del mes origen (sin su arrastre) + lo no pagado allí, si `arrastrar`.
+ * - Fijo y variable: el mismo valor del mes origen.
+ * No repite lo que ya está en el destino, ni cuotas de compras divididas (ya están proyectadas), ni ítems que terminaron.
+ */
+export function planClonado(origen: string, destino: string, gastos: Gasto[], conceptos: Concepto[], op: OpcionesClonar) {
+  const enDestino = gastos.filter((g) => g.periodo === destino)
+  const yaEsta = (g: Gasto) => enDestino.some((d) => (g.concepto_id && d.concepto_id === g.concepto_id) || d.descripcion.trim().toLowerCase() === g.descripcion.trim().toLowerCase())
+  const terminados = new Set(conceptos.filter((c) => c.hasta_periodo && c.hasta_periodo < destino).map((c) => c.id))
+  const filas: FilaClon[] = []
+  const saltados: { g: Gasto; motivo: string }[] = []
+  for (const g of gastos.filter((x) => x.periodo === origen)) {
+    if (g.estado === 'omitido') continue
+    if (g.grupo_cuotas) saltados.push({ g, motivo: 'cuota de una compra dividida (ya está proyectada)' })
+    else if (g.concepto_id && terminados.has(g.concepto_id)) saltados.push({ g, motivo: 'el ítem ya terminó' })
+    else if (yaEsta(g)) saltados.push({ g, motivo: 'ya está en el mes destino' })
+    else if (!op[g.clase_gasto]) saltados.push({ g, motivo: 'tipo no incluido' })
+    else {
+      const base = Math.max(0, Number(g.valor_presupuestado) - Number(g.arrastre ?? 0))
+      const noPagado = g.estado === 'pagado' ? Math.max(0, Number(g.valor_presupuestado) - Number(g.valor_pagado ?? 0)) : Number(g.valor_presupuestado)
+      const arrastre = g.clase_gasto === 'credito' && op.arrastrar ? noPagado : 0
+      filas.push({ origen: g, base, arrastre, valor: base + arrastre })
+    }
+  }
+  return { filas, saltados }
 }

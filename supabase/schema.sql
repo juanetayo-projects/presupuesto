@@ -297,3 +297,12 @@ left join (
   where m.tipo = 'gasto' and m.fecha >= coalesce(x.fecha_saldo, '1900-01-01')
   group by m.obligacion_id
 ) p on p.obligacion_id = o.id;
+
+-- ── Tipo de compromiso y saldo arrastrado ─────────────────────────────────────────────
+-- credito: ligado a una deuda; al clonar el plan arrastra lo que quedó sin pagar del mes origen.
+-- fijo: mismo valor cada mes. variable: cambia de un mes a otro.
+alter table public.conceptos add column clase_gasto text not null default 'variable'
+  check (clase_gasto in ('credito','fijo','variable'));
+alter table public.gastos add column clase_gasto text not null default 'variable'
+  check (clase_gasto in ('credito','fijo','variable'));
+alter table public.gastos add column arrastre numeric(14,0);  -- no pagado del mes anterior sumado al clonar

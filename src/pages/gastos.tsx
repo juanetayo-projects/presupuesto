@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, CopyPlus, Download, Layers, List, Lock, Pencil, Plus, Telescope, Trash2, Undo2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, CopyPlus, Download, Layers, List, Lock, Pencil, Plus, Telescope, Trash2, Undo2 } from 'lucide-react'
 import { ResponsableBadge } from '@/components/responsable-badge'
 import { PanelConceptos } from '@/components/panel-conceptos'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -15,6 +15,7 @@ import { CategoryIcon } from '@/components/category-icon'
 import { IconoGasto } from '@/components/marca-icono'
 import { FilterBar } from '@/components/filter-bar'
 import { EstadoMesBanner } from '@/components/estado-mes'
+import { BadgeClase, ClonarPlanDialog } from '@/components/clonar-plan'
 import { useData, useFiltros } from '@/context/data'
 import { useUi } from '@/context/ui'
 import { deshacerPago, eliminarGasto, generarMes } from '@/lib/api'
@@ -70,6 +71,7 @@ export function GastosPage() {
   const seleccionar = (id: string) => setCatSel((x) => (x === id ? null : id))
   const { abrirGasto } = useUi()
   const [generando, setGenerando] = useState(false)
+  const [clonando, setClonando] = useState(false)
   const [vista, setVista] = useState<'lista' | 'calendario'>(() => {
     try {
       return localStorage.getItem('ppto.vista') === 'calendario' ? 'calendario' : 'lista'
@@ -157,6 +159,11 @@ export function GastosPage() {
           {faltantes > 0 && estado !== 'cerrado' && (
             <Button variant="outline" size="sm" onClick={completarMes} disabled={generando}>
               <CopyPlus /> {gastosMes.length ? `Agregar ${faltantes} de la plantilla` : 'Generar mes'}
+            </Button>
+          )}
+          {estado !== 'cerrado' && (
+            <Button variant="outline" size="sm" onClick={() => setClonando(true)}>
+              <Copy /> Clonar plan
             </Button>
           )}
           <Button size="sm" onClick={() => abrirGasto()}>
@@ -251,6 +258,8 @@ export function GastosPage() {
         </aside>
       )}
       </div>
+
+      <ClonarPlanDialog open={clonando} onClose={() => setClonando(false)} destinoInicial={periodo} />
 
       <Sheet open={Boolean(grupoSel) && !anchoLg} onOpenChange={(v) => !v && setCatSel(null)}>
         <SheetContent side="right" className="w-[88vw] gap-0 overflow-y-auto p-3 sm:max-w-sm [&>button]:hidden">
@@ -349,6 +358,7 @@ Aceptar: sólo esta cuota.`
               <Layers /> {g.cuota_num}/{g.cuotas_total}
             </Badge>
           )}
+          {g.clase_gasto && g.clase_gasto !== 'variable' && <BadgeClase clase={g.clase_gasto} />}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
           {g.medio_pago && <span>{g.medio_pago}</span>}
@@ -366,6 +376,11 @@ Aceptar: sólo esta cuota.`
         <p className="text-sm font-semibold tabular-nums">{money(valorGasto(g))}</p>
         {pagado && Number(g.valor_pagado) !== Number(g.valor_presupuestado) && (
           <p className="text-[11px] text-muted-foreground tabular-nums">ppto {money(g.valor_presupuestado)}</p>
+        )}
+        {Number(g.arrastre) > 0 && (
+          <p className="text-[11px] text-rose-600 tabular-nums dark:text-rose-400" title="Valor no pagado del mes anterior sumado al clonar el plan">
+            incl. {money(g.arrastre)} sin pagar
+          </p>
         )}
       </div>
       <div className="flex gap-0.5">

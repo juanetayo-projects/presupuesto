@@ -21,6 +21,7 @@ App web mobile-first (instalable como PWA) para llevar el presupuesto mensual de
 
 - **Movimientos**: registro en un paso de gastos pagados e ingresos recibidos, filtros por rango de fechas, categoría y persona, enlace opcional a un compromiso del plan y a una deuda, exportación a Excel.
 - **Plan**: compromisos del mes (antes "Gastos"): lista por categoría o calendario, cuotas, pagar con un toque.
+- **Clonar plan**: copia el plan de un mes a otro. Cada compromiso es **crédito** (cuota de una deuda: arrastra lo que quedó sin pagar en el mes origen), **fijo** (mismo valor) o **variable** (cambia); se elige qué tipos clonar y se ve la vista previa con el saldo de cada deuda antes de crear nada.
 
 - **Inicio**: KPIs (ingresos recibidos, gastado, plan del mes, por pagar del plan, balance, deuda al cierre del mes), comparativo con el mes anterior, plan vs. real por categoría, alertas de pago, donut por categoría y barras por concepto (en % del total de gastos), tendencia de 6 meses, regla 50/30/20, metas y ejecución por categoría.
 - **Gastos**: lista agrupada por categoría o **calendario de pagos**; filtros por categoría, medio de pago y estado; pago con un toque (valor, fecha, quién pagó, abono a capital); gastos divididos en **N cuotas**; exportación a Excel.

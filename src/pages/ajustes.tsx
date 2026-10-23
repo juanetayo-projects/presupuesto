@@ -13,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CategoryIcon, ICONOS } from '@/components/category-icon'
 import { limpiarDominio, MarcaIcono } from '@/components/marca-icono'
 import { IngresosCard } from '@/components/ingresos'
+import { BadgeClase } from '@/components/clonar-plan'
 import { MoneyInput } from '@/components/money-input'
 import { NUEVA_DEUDA, ObligacionSelect, resolverObligacion, SIN_DEUDA, TipoDeudaSelect } from '@/components/obligacion-select'
 import { ResponsableBadge } from '@/components/responsable-badge'
@@ -20,7 +21,7 @@ import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
 import { agregarMiembro, eliminarCategoria, eliminarConcepto, eliminarMiembro, guardarCategoria, guardarConcepto, guardarConfig } from '@/lib/api'
 import { mesCorto, money } from '@/lib/format'
-import { CLASES, MEDIOS_PAGO, type ClaseCategoria, type Concepto, type TipoObligacion } from '@/lib/types'
+import { CLASES, MEDIOS_PAGO, type ClaseCategoria, type Concepto, type TipoObligacion, CLASES_GASTO, type ClaseGasto } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 const GRIS_OTROS = "#94a3b8"
@@ -160,6 +161,7 @@ function Plantilla() {
                   <ResponsableBadge nombre={c.responsable} />
                   {c.hasta_periodo && <Badge variant="outline">hasta {mesCorto(c.hasta_periodo)}</Badge>}
                   {!c.recurrente && c.activo && <Badge variant="outline">Eventual</Badge>}
+                  {c.activo && <BadgeClase clase={c.clase_gasto ?? 'variable'} />}
                   {!c.activo && <Badge variant="secondary">Inactivo</Badge>}
                   {c.activo && Number(c.valor_base) === 0 && <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-amber-300">Definir valor</Badge>}
                   <span className="text-sm font-medium tabular-nums">{money(c.valor_base)}</span>
@@ -176,7 +178,7 @@ function Plantilla() {
 }
 
 function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | null; onClose: () => void }) {
-  const { categorias, config, gastos, recargar } = useData()
+  const { categorias, config, gastos, obligaciones, recargar } = useData()
   const [c, setC] = useState<Partial<Concepto>>({})
   const [obl, setObl] = useState(SIN_DEUDA)
   const [tipoNueva, setTipoNueva] = useState<TipoObligacion>('tarjeta')
@@ -188,6 +190,9 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
   const set = <K extends keyof Concepto>(k: K, v: Concepto[K]) => setC((x) => ({ ...x, [k]: v }))
   const cat = categorias.find((k) => k.id === c.categoria_id)
   const usos = c.id ? gastos.filter((g) => g.concepto_id === c.id).length : 0
+  // Con una deuda (que no sea una cadena de ahorro) el ítem es un crédito
+  const tipoDeuda = obl === NUEVA_DEUDA ? tipoNueva : obligaciones.find((o) => o.id === obl)?.tipo
+  const esCredito = obl !== SIN_DEUDA && tipoDeuda !== 'cadena'
 
   async function guardar() {
     if (!c.nombre?.trim() || !c.categoria_id) return toast.error('Nombre y categoría son obligatorios')
@@ -214,6 +219,7 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
         logo: limpiarDominio(c.logo),
         icono: c.icono || null,
         hasta_periodo: c.hasta_periodo || null,
+        clase_gasto: esCredito ? 'credito' : c.clase_gasto === 'credito' || !c.clase_gasto ? 'variable' : c.clase_gasto,
       })
       toast.success(obl === NUEVA_DEUDA ? 'Ítem y deuda creados' : 'Ítem guardado')
       await recargar()
@@ -320,6 +326,15 @@ function ConceptoForm({ concepto, onClose }: { concepto: Partial<Concepto> | nul
           </div>
         )}
 
+        <CampoA label="Tipo (fijo, variable o crédito)" className="col-span-2 sm:col-span-3">
+          <ToggleGroup type="single" variant="outline" size="sm" value={esCredito ? 'credito' : (c.clase_gasto ?? 'variable')} onValueChange={(v) => v && set('clase_gasto', v as ClaseGasto)} className="h-8 w-full">
+            {(Object.keys(CLASES_GASTO) as ClaseGasto[]).map((k) => (
+              <ToggleGroupItem key={k} value={k} title={CLASES_GASTO[k].ayuda} className="h-8 flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                {CLASES_GASTO[k].label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </CampoA>
         <CampoA label="Valor mensual" htmlFor="c-valor">
           <MoneyInput id="c-valor" value={Number(c.valor_base ?? 0)} onChange={(v) => set('valor_base', v)} />
         </CampoA>

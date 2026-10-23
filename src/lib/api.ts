@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { fechaEnPeriodo, periodoMas } from './format'
+import type { FilaClon } from './metrics'
 import type { CierreMes, Concepto, Gasto, Ingreso, Meta, Movimiento, MovimientoInput, Obligacion } from './types'
 
 function check<T>({ data, error }: { data: T; error: { message: string } | null }) {
@@ -75,6 +76,7 @@ export async function generarMes(periodo: string, conceptos: Concepto[], gastosM
       valor_presupuestado: c.valor_base,
       fecha_limite: fechaEnPeriodo(periodo, c.dia_limite),
       responsable: c.responsable,
+      clase_gasto: c.clase_gasto,
     }))
   if (nuevos.length) check(await supabase.from('gastos').insert(nuevos))
   if (ingresosMes.length === 0) {
@@ -83,7 +85,7 @@ export async function generarMes(periodo: string, conceptos: Concepto[], gastosM
   return nuevos.length
 }
 
-export type GastoInput = Omit<Gasto, 'id' | 'grupo_cuotas' | 'cuota_num' | 'cuotas_total'>
+export type GastoInput = Omit<Gasto, 'id' | 'grupo_cuotas' | 'cuota_num' | 'cuotas_total' | 'arrastre'>
 
 /**
  * Inserta un gasto. Si cuotas > 1 lo reparte en meses consecutivos con el mismo grupo,
@@ -285,4 +287,29 @@ export async function cerrarMes(periodo: string, resumen: CierreMes['resumen']) 
 
 export async function reabrirMes(periodo: string) {
   check(await supabase.from('cierres_mes').delete().eq('periodo', periodo))
+}
+
+/** Crea en el mes destino los compromisos calculados por `planClonado` y, si se pide, copia los ingresos esperados. */
+export async function clonarPlan(destino: string, filas: FilaClon[], ingresosOrigen: Ingreso[], ingresosDestino: Ingreso[], copiarIngresos: boolean) {
+  const nuevos = filas.map(({ origen: g, valor, arrastre }) => ({
+    periodo: destino,
+    concepto_id: g.concepto_id,
+    categoria_id: g.categoria_id,
+    obligacion_id: g.obligacion_id,
+    descripcion: g.descripcion,
+    medio_pago: g.medio_pago,
+    valor_presupuestado: valor,
+    arrastre: arrastre || null,
+    fecha_limite: g.fecha_limite ? fechaEnPeriodo(destino, Number(g.fecha_limite.slice(8, 10))) : null,
+    notas: g.notas,
+    responsable: g.responsable,
+    clase_gasto: g.clase_gasto,
+  }))
+  if (nuevos.length) check(await supabase.from('gastos').insert(nuevos))
+  let ingresos = 0
+  if (copiarIngresos && ingresosDestino.length === 0 && ingresosOrigen.length) {
+    check(await supabase.from('ingresos').insert(ingresosOrigen.map((i) => ({ periodo: destino, descripcion: i.descripcion, tipo: i.tipo, valor: i.valor, notas: i.notas }))))
+    ingresos = ingresosOrigen.length
+  }
+  return { compromisos: nuevos.length, ingresos }
 }

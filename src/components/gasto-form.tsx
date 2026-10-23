@@ -13,7 +13,7 @@ import { ResponsiveModal } from '@/components/responsive-modal'
 import { useData } from '@/context/data'
 import { actualizarGasto, crearGasto, eliminarGasto } from '@/lib/api'
 import { fechaEnPeriodo, money, nombreMes, periodoMas } from '@/lib/format'
-import { MEDIOS_PAGO, type Gasto, type TipoObligacion } from '@/lib/types'
+import { CLASES_GASTO, MEDIOS_PAGO, type ClaseGasto, type Gasto, type TipoObligacion } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -37,7 +37,7 @@ function Campo({ label, htmlFor, className, children }: { label: string; htmlFor
 }
 
 export function GastoForm({ open, onOpenChange, gasto }: Props) {
-  const { periodo, categorias, conceptos, config, recargar, estadoMes } = useData()
+  const { periodo, categorias, conceptos, obligaciones, config, recargar, estadoMes } = useData()
   const editando = Boolean(gasto)
 
   const [conceptoId, setConceptoId] = useState(NINGUNO)
@@ -51,6 +51,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
   const [tipoNueva, setTipoNueva] = useState<TipoObligacion>('tarjeta')
   const [notas, setNotas] = useState('')
   const [responsable, setResponsable] = useState('Familiar')
+  const [clase, setClase] = useState<ClaseGasto>('variable')
   const [dividir, setDividir] = useState(false)
   const [cuotas, setCuotas] = useState(3)
   const [modo, setModo] = useState<'total' | 'cuota'>('total')
@@ -70,6 +71,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     setTipoNueva('tarjeta')
     setNotas(gasto?.notas ?? '')
     setResponsable(gasto?.responsable ?? 'Familiar')
+    setClase(gasto?.clase_gasto ?? 'variable')
     setDividir(false)
     setCuotas(3)
     setModo('total')
@@ -86,6 +88,7 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     setFecha(fechaEnPeriodo(mes, c.dia_limite) ?? '')
     setObligacionId(c.obligacion_id ?? SIN_DEUDA)
     setResponsable(c.responsable ?? 'Familiar')
+    setClase(c.clase_gasto ?? 'variable')
   }
 
   const resumenCuotas = useMemo(() => {
@@ -94,6 +97,10 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
     const porCuota = Math.round(total / cuotas)
     return { total, porCuota, hasta: nombreMes(periodoMas(mes, cuotas - 1)) }
   }, [dividir, cuotas, modo, valor, mes])
+
+  // Con una deuda (que no sea una cadena de ahorro) el compromiso es un crédito: al clonar arrastra lo no pagado
+  const tipoDeuda = obligacionId === NUEVA_DEUDA ? tipoNueva : obligaciones.find((o) => o.id === obligacionId)?.tipo
+  const esCredito = obligacionId !== SIN_DEUDA && tipoDeuda !== 'cadena'
 
   // Un mes cerrado no se modifica (la base también lo impide); en meses futuros el valor es un estimado a pagar.
   const cerrado = estadoMes(mes) === 'cerrado' || (gasto ? estadoMes(gasto.periodo) === 'cerrado' : false)
@@ -124,6 +131,8 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
         fecha_limite: fecha || null,
         notas: notas.trim() || null,
         responsable,
+        // Con una deuda asociada el compromiso es un crédito (al clonar arrastra lo no pagado)
+        clase_gasto: (esCredito ? 'credito' : clase === 'credito' ? 'variable' : clase) as ClaseGasto,
       }
       if (gasto) {
         await actualizarGasto(gasto.id, base)
@@ -273,6 +282,15 @@ export function GastoForm({ open, onOpenChange, gasto }: Props) {
               ))}
             </SelectContent>
           </Select>
+        </Campo>
+        <Campo label="Tipo de compromiso" className="col-span-2 sm:col-span-3">
+          <ToggleGroup type="single" variant="outline" size="sm" value={esCredito ? 'credito' : clase} onValueChange={(v) => v && setClase(v as ClaseGasto)} className="h-8 w-full">
+            {(Object.keys(CLASES_GASTO) as ClaseGasto[]).map((k) => (
+              <ToggleGroupItem key={k} value={k} title={CLASES_GASTO[k].ayuda} className="h-8 flex-1 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                {CLASES_GASTO[k].label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </Campo>
         <Campo label="Préstamo / deuda" className="col-span-2 sm:col-span-1">
           <ObligacionSelect value={obligacionId} onChange={setObligacionId} />

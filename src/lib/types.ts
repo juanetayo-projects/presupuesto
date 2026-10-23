@@ -36,6 +36,20 @@ export interface Concepto {
   icono: string | null
   /** Último mes en que se genera (yyyy-mm-01); null = sin fin. */
   hasta_periodo: string | null
+  clase_gasto: ClaseGasto
+}
+
+/**
+ * - credito: ligado a una deuda (préstamo, tarjeta, compra a cuotas); al clonar el plan arrastra lo no pagado.
+ * - fijo: mismo valor cada mes (suscripciones, mesadas, cadena…).
+ * - variable: cambia de un mes a otro (servicios, imprevistos…).
+ */
+export type ClaseGasto = 'credito' | 'fijo' | 'variable'
+
+export const CLASES_GASTO: Record<ClaseGasto, { label: string; ayuda: string }> = {
+  credito: { label: 'Crédito', ayuda: 'Cuota de una deuda: al clonar arrastra lo que quedó sin pagar' },
+  fijo: { label: 'Fijo', ayuda: 'Mismo valor todos los meses' },
+  variable: { label: 'Variable', ayuda: 'El valor cambia de un mes a otro' },
 }
 
 export interface Gasto {
@@ -58,6 +72,9 @@ export interface Gasto {
   notas: string | null
   pagado_por: string | null
   responsable: string
+  clase_gasto: ClaseGasto
+  /** Valor no pagado del mes anterior sumado al clonar el plan (créditos). */
+  arrastre: number | null
 }
 
 export interface Ingreso {
