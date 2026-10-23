@@ -14,7 +14,7 @@ interface AuthState {
 }
 
 /** Rechaza si la promesa tarda más de `ms` (p. ej. una renovación de sesión que nunca responde). */
-function conLimite<T>(p: PromiseLike<T>, ms = 25000) {
+function conLimite<T>(p: PromiseLike<T>, ms = 60000) {
   return Promise.race([Promise.resolve(p), new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Tiempo de espera agotado')), ms))])
 }
 
